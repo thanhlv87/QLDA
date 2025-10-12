@@ -12,6 +12,9 @@ import {
   where,
   Query,
   DocumentData,
+  deleteDoc,
+  getDocs,
+  writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from './services/firebase';
 import { permissions } from './services/permissions';
@@ -24,6 +27,7 @@ import ProjectDetails from './components/ProjectDetails';
 import UserList from './components/UserList';
 import EditUserForm from './components/EditUserForm';
 import AddProjectForm from './components/AddProjectForm';
+import ConfirmationModal from './components/ConfirmationModal';
 
 const App: React.FC = () => {
   // Authentication state
@@ -42,6 +46,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [confirmation, setConfirmation] = useState<{ message: string; onConfirm: () => Promise<void>; } | null>(null);
   
   const parseDate = (dateStr: string): number => {
     if (!dateStr || typeof dateStr !== 'string') return 0;
@@ -224,6 +229,49 @@ const App: React.FC = () => {
       }
   };
 
+  const handleDeleteProject = (projectId: string, projectName: string) => {
+    if (!permissions.canDeleteProject(currentUser)) {
+      alert("Bạn không có quyền thực hiện hành động này.");
+      return;
+    }
+
+    const deletionLogic = async () => {
+        try {
+            // First, delete all associated reports
+            const reportsQuery = query(collection(db, 'reports'), where('projectId', '==', projectId));
+            const reportSnapshot = await getDocs(reportsQuery);
+            const batch = writeBatch(db);
+            reportSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+
+            // Then, delete the project itself
+            const projectRef = doc(db, 'projects', projectId);
+            await deleteDoc(projectRef);
+
+            alert(`Dự án "${projectName}" đã được xóa thành công.`);
+            
+            // If deleting from details view, navigate back to dashboard
+            if (view === 'projectDetails') {
+                setView('dashboard');
+                setSelectedProjectId(null);
+            }
+        } catch (error) {
+            console.error("Error deleting project and its reports: ", error);
+            alert('Đã xảy ra lỗi khi xóa dự án.');
+        } finally {
+            setConfirmation(null); // Close the modal
+        }
+    };
+    
+    setConfirmation({
+        message: `Bạn có chắc chắn muốn xóa dự án "${projectName}" không?\nHành động này không thể hoàn tác và sẽ xóa tất cả các báo cáo liên quan.`,
+        onConfirm: deletionLogic,
+    });
+  };
+
+
   // The displayedProjects logic can now be simplified as the fetching logic already filters the data.
   const displayedProjects = projects;
 
@@ -277,7 +325,13 @@ const App: React.FC = () => {
             {displayedProjects.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {displayedProjects.map(project => (
-                  <ProjectCard key={project.id} project={project} onSelectProject={handleSelectProject} />
+                  <ProjectCard 
+                    key={project.id} 
+                    project={project} 
+                    currentUser={currentUser}
+                    onSelectProject={handleSelectProject} 
+                    onDeleteProject={handleDeleteProject}
+                  />
                 ))}
               </div>
             ) : (
@@ -297,6 +351,7 @@ const App: React.FC = () => {
                 onBack={() => { setView('dashboard'); setSelectedProjectId(null); }}
                 onAddReport={handleAddReport}
                 onUpdateProject={handleUpdateProject}
+                onDeleteProject={handleDeleteProject}
               />
             );
         }
@@ -348,6 +403,14 @@ const App: React.FC = () => {
       <main className="p-4 sm:p-6 lg:p-8">
         {renderContent()}
       </main>
+      {confirmation && (
+        <ConfirmationModal 
+          message={confirmation.message}
+          onConfirm={confirmation.onConfirm}
+          onCancel={() => setConfirmation(null)}
+          confirmText="Xóa"
+        />
+      )}
     </div>
   );
 };

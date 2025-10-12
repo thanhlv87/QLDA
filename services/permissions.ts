@@ -42,5 +42,13 @@ export const permissions = {
       (user.role === Role.ProjectManager && project.projectManagerIds.includes(user.id)) ||
       (user.role === Role.LeadSupervisor && project.leadSupervisorIds.includes(user.id))
     );
+  },
+
+  /**
+   * Checks if a user can delete a project.
+   */
+  canDeleteProject(user: User | null): boolean {
+    if (!user) return false;
+    return [Role.Admin, Role.DepartmentHead].includes(user.role);
   }
 };

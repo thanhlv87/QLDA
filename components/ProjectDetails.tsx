@@ -45,6 +45,7 @@ interface ProjectDetailsProps {
   onBack: () => void;
   onAddReport: (report: Omit<DailyReport, 'id'>) => void;
   onUpdateProject: (project: Project) => void;
+  onDeleteProject: (projectId: string, projectName: string) => void;
 }
 
 const InfoField: React.FC<{ label: string; value: string }> = ({ label, value }) => (
@@ -70,6 +71,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   onBack,
   onAddReport,
   onUpdateProject,
+  onDeleteProject
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [newReportTasks, setNewReportTasks] = useState('');
@@ -221,7 +223,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   return (
     <div className="animate-fade-in">
        {viewingImage && <ImageLightbox imageUrl={viewingImage} onClose={() => setViewingImage(null)} />}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-6 gap-4 flex-wrap">
         <div>
             <button onClick={onBack} className="text-secondary hover:text-accent font-semibold mb-4 flex items-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -231,14 +233,24 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             </button>
             <h2 className="text-3xl font-bold text-gray-800">{project.name}</h2>
         </div>
-        {permissions.canEditProject(currentUser, project) && (
-            <button 
-                onClick={() => setIsEditing(true)}
-                className="bg-accent text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
-            >
-                Chỉnh sửa Dự án
-            </button>
-        )}
+        <div className="flex gap-2">
+            {permissions.canEditProject(currentUser, project) && (
+                <button 
+                    onClick={() => setIsEditing(true)}
+                    className="bg-accent text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
+                >
+                    Chỉnh sửa Dự án
+                </button>
+            )}
+             {permissions.canDeleteProject(currentUser) && (
+                <button 
+                    onClick={() => onDeleteProject(project.id, project.name)}
+                    className="bg-error text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
+                >
+                    Xóa Dự án
+                </button>
+            )}
+        </div>
       </div>
 
        {/* AI Summary Section - Redesigned for a more compact look */}

@@ -1,9 +1,12 @@
 import React, { useMemo } from 'react';
-import type { Project } from '../types';
+import type { Project, User } from '../types';
+import { permissions } from '../services/permissions';
 
 interface ProjectCardProps {
   project: Project;
+  currentUser: User | null;
   onSelectProject: (projectId: string) => void;
+  onDeleteProject: (projectId: string, projectName: string) => void;
 }
 
 const CalendarIcon = () => (
@@ -12,8 +15,14 @@ const CalendarIcon = () => (
     </svg>
 );
 
+const TrashIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+    </svg>
+)
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, onSelectProject }) => {
+
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, currentUser, onSelectProject, onDeleteProject }) => {
   const progressInfo = useMemo(() => {
     const parseDate = (dateStr: string): Date => {
       const [day, month, year] = dateStr.split('/').map(Number);
@@ -65,11 +74,23 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onSelectProject }) =
 
   return (
     <div 
-      className="bg-base-100 rounded-lg shadow-lg hover:shadow-2xl transition-shadow duration-300 cursor-pointer overflow-hidden flex flex-col"
+      className="bg-base-100 rounded-lg shadow-lg hover:shadow-2xl transition-shadow duration-300 cursor-pointer overflow-hidden flex flex-col group relative"
       onClick={() => onSelectProject(project.id)}
     >
+        {permissions.canDeleteProject(currentUser) && (
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteProject(project.id, project.name);
+                }}
+                className="absolute top-2 right-2 bg-gray-200 text-gray-600 hover:bg-error hover:text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                aria-label={`Xóa dự án ${project.name}`}
+            >
+                <TrashIcon />
+            </button>
+        )}
       <div className="p-6 flex-grow">
-        <h3 className="text-xl font-bold text-primary mb-3 truncate">{project.name}</h3>
+        <h3 className="text-xl font-bold text-primary mb-3 truncate pr-8">{project.name}</h3>
         <div className="space-y-2 text-sm text-gray-700">
           <div className="flex items-center">
             <CalendarIcon />
