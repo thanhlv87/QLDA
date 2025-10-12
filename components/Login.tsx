@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 
 interface LoginProps {
@@ -19,39 +21,45 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
   };
 
   return (
-    // Use bg-neutral which is defined, instead of an undefined class
-    <div className="min-h-screen flex items-center justify-center bg-neutral px-4">
-      {/* Replaced 'card' and component classes with standard Tailwind utilities for styling */}
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden">
-        {/* Replaced 'card-body' with standard padding */}
-        <form className="p-8" onSubmit={handleSubmit}>
-          {/* Ensured title text color is dark and visible */}
-          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Đăng nhập</h2>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
+      
+      <div className="w-full max-w-md">
+        <img 
+          src="https://raw.githubusercontent.com/thanhlv87/pic/refs/heads/main/npsc.png" 
+          alt="NPSC Logo"
+          className="w-full h-auto mb-8"
+        />
+      </div>
+
+      <div className="w-full max-w-md bg-neutral rounded-2xl shadow-xl overflow-hidden transition-all duration-300">
+        
+        <form className="p-8 space-y-6" onSubmit={handleSubmit}>
+          <h2 className="text-3xl font-bold text-center text-primary mb-2">Chào mừng trở lại</h2>
+          <p className="text-center text-gray-500 mb-8">Đăng nhập để tiếp tục quản lý dự án</p>
+          
           {error && (
-            // Replaced 'alert alert-error' with standard Tailwind classes for a visible error message
-            <div className="bg-error/10 border-l-4 border-error text-error p-4 mb-4" role="alert">
+            <div className="bg-error/10 border-l-4 border-error text-error p-4" role="alert">
                 <p className="font-bold">Lỗi Đăng nhập</p>
                 <p>{error}</p>
             </div>
           )}
-          {/* Replaced 'form-control' with simple div and spacing */}
-          <div className="mb-4">
-            {/* Ensured label text color is dark and visible */}
+          
+          <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
               Email
             </label>
-            {/* Replaced 'input input-bordered' with standard Tailwind classes for a visible input field */}
             <input
               id="email"
               type="email"
               placeholder="nhap@email.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary"
+              className="w-full px-4 py-3 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition-shadow"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
-          <div className="mb-6">
+
+          <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
               Mật khẩu
             </label>
@@ -59,15 +67,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
               id="password"
               type="password"
               placeholder="********"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary"
+              className="w-full px-4 py-3 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition-shadow"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
-          <div className="mt-6">
-            {/* Replaced 'btn btn-primary' with standard Tailwind classes for a visible button */}
-            <button type="submit" className="w-full bg-primary hover:bg-secondary text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={isLoading}>
+
+          <div className="pt-4">
+            <button type="submit" className="w-full bg-accent hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-orange-400/50" disabled={isLoading}>
               {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </button>
           </div>

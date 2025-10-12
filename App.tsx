@@ -1,418 +1,357 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth';
 import {
   collection,
-  query,
-  onSnapshot,
   doc,
   getDoc,
+  onSnapshot,
+  query,
+  orderBy,
   addDoc,
   updateDoc,
-  orderBy,
-  where,
-  Query,
-  DocumentData,
   deleteDoc,
-  getDocs,
-  writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from './services/firebase';
-import { permissions } from './services/permissions';
 import type { User, Project, DailyReport } from './types';
-import { Role } from './types';
+import { permissions } from './services/permissions';
+
+// Components
 import Login from './components/Login';
 import Header from './components/Header';
 import ProjectCard from './components/ProjectCard';
 import ProjectDetails from './components/ProjectDetails';
-import UserList from './components/UserList';
-import EditUserForm from './components/EditUserForm';
 import AddProjectForm from './components/AddProjectForm';
+import UserManagement from './components/UserManagement';
 import ConfirmationModal from './components/ConfirmationModal';
 
+type AppView = 'dashboard' | 'projectDetails' | 'addProject' | 'userManagement';
+
 const App: React.FC = () => {
-  // Authentication state
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
+    // Authentication state
+    const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [authError, setAuthError] = useState<string | null>(null);
 
-  // Data state
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [reports, setReports] = useState<DailyReport[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [isDataLoading, setIsDataLoading] = useState(true);
+    // Data state
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [reports, setReports] = useState<DailyReport[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
 
-  // UI state
-  type View = 'dashboard' | 'projectDetails' | 'userManagement' | 'addProject';
-  const [view, setView] = useState<View>('dashboard');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [confirmation, setConfirmation] = useState<{ message: string; onConfirm: () => Promise<void>; } | null>(null);
-  
-  const parseDate = (dateStr: string): number => {
-    if (!dateStr || typeof dateStr !== 'string') return 0;
-    const parts = dateStr.split('/');
-    if (parts.length !== 3) return 0;
-    const [day, month, year] = parts.map(Number);
-    // Handle potential NaN from map
-    if (isNaN(day) || isNaN(month) || isNaN(year)) return 0;
-    return new Date(year, month - 1, day).getTime();
-  };
+    // UI/Navigation state
+    const [view, setView] = useState<AppView>('dashboard');
+    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
 
-  // Auth effect
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            setCurrentUser({ id: userDocSnap.id, ...userDocSnap.data() } as User);
-          } else {
-            console.error("User document not found in Firestore.");
-            setCurrentUser(null);
-            await signOut(auth);
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setCurrentUser(null);
-          await signOut(auth);
+    // Effect for handling auth state changes
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setFirebaseUser(user);
+            if (!user) {
+                setCurrentUser(null);
+                setIsLoading(false);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Effect for fetching user profile once authenticated
+    useEffect(() => {
+        if (!firebaseUser) return;
+
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const unsubscribe = onSnapshot(userDocRef, (userDoc) => {
+            if (userDoc.exists()) {
+                const userData = { id: userDoc.id, ...userDoc.data() } as User;
+                setCurrentUser(userData);
+            } else {
+                console.error("User document not found in Firestore!");
+                signOut(auth); // Log out if profile doesn't exist
+            }
+        }, (error) => {
+            console.error("Error fetching user data:", error);
+            setAuthError("Failed to load user profile.");
+            signOut(auth);
+        });
+
+        return () => unsubscribe();
+    }, [firebaseUser]);
+
+    // Effect for fetching data (projects, reports, users) based on current user
+    useEffect(() => {
+        if (!currentUser) {
+            setProjects([]);
+            setReports([]);
+            setUsers([]);
+            setIsLoading(false);
+            return;
         }
-      } else {
-        setCurrentUser(null);
-      }
-      setIsAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
 
-  // Main data fetching effect, now role-aware
-  useEffect(() => {
-    if (!currentUser) {
-      setProjects([]);
-      setReports([]);
-      setUsers([]);
-      if(isDataLoading) setIsDataLoading(false);
-      return;
-    }
+        setIsLoading(true);
 
-    setIsDataLoading(true);
-
-    // 1. Determine the correct projects query based on user role
-    let projectsQuery: Query<DocumentData>;
-    if (currentUser.role === Role.LeadSupervisor) {
-        projectsQuery = query(collection(db, 'projects'), where('leadSupervisorIds', 'array-contains', currentUser.id));
-    } else if (currentUser.role === Role.ProjectManager) {
-        projectsQuery = query(collection(db, 'projects'), where('projectManagerIds', 'array-contains', currentUser.id));
-    } else {
-        // Admins, DeptHeads see all projects
-        projectsQuery = query(collection(db, 'projects'));
-    }
-
-    // 2. Set up the projects listener
-    const unsubProjects = onSnapshot(projectsQuery, (snapshot) => {
-      const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
-      projectsData.sort((a, b) => parseDate(b.constructionStartDate) - parseDate(a.constructionStartDate));
-      setProjects(projectsData);
-      setIsDataLoading(false);
-
-      // 3. Once projects are fetched, set up the reports listener based on the visible projects
-      const projectIds = projectsData.map(p => p.id);
-      if (projectIds.length > 0) {
-        const reportsQuery = query(collection(db, 'reports'), where('projectId', 'in', projectIds));
-        const unsubReports = onSnapshot(reportsQuery, (reportSnapshot) => {
-          const reportsData = reportSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyReport));
-          reportsData.sort((a, b) => parseDate(b.date) - parseDate(a.date));
-          setReports(reportsData);
-        }, (error) => console.error("Error fetching reports:", error));
-        
-        return () => unsubReports(); // Cleanup reports listener when projects change
-      } else {
-        setReports([]); // No projects, so no reports
-      }
-    }, (error) => {
-        console.error("Error fetching projects:", error);
-        setIsDataLoading(false);
-    });
-
-    // 4. Set up a separate, conditional listener for the users list
-    let unsubUsers = () => {};
-    if (permissions.canFetchAllUsers(currentUser)) {
-       unsubUsers = onSnapshot(query(collection(db, 'users'), orderBy('name')), (snapshot) => {
-        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-        setUsers(usersData);
-      }, (error) => {
-          console.error("Error fetching users:", error);
-      });
-    } else {
-      setUsers([]); // Clear user list for roles without permission
-    }
-    
-
-    return () => {
-      unsubProjects();
-      unsubUsers();
-      // The reports listener is cleaned up inside the projects listener
-    };
-  }, [currentUser]);
-
-
-  // Handlers
-  const handleLogin = async (email: string, password: string) => {
-    setAuthError(null);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      console.error(error);
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        setAuthError('Email hoặc mật khẩu không chính xác.');
-      } else {
-        setAuthError('Đã xảy ra lỗi khi đăng nhập.');
-      }
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    setView('dashboard');
-    setSelectedProjectId(null);
-  };
-  
-  const handleSelectProject = (projectId: string) => {
-    setSelectedProjectId(projectId);
-    setView('projectDetails');
-  };
-  
-  const handleAddReport = async (report: Omit<DailyReport, 'id'>) => {
-    try {
-        await addDoc(collection(db, 'reports'), report);
-        alert('Báo cáo đã được thêm thành công!');
-    } catch (error) {
-        console.error("Error adding report: ", error);
-        alert('Đã xảy ra lỗi khi thêm báo cáo.');
-    }
-  };
-
-  const handleUpdateProject = async (project: Project) => {
-      try {
-          const projectRef = doc(db, 'projects', project.id);
-          const { id, ...projectData } = project;
-          await updateDoc(projectRef, projectData);
-          alert('Dự án đã được cập nhật thành công!');
-          // No need to change view, it should stay on details
-      } catch (error) {
-          console.error("Error updating project: ", error);
-          alert('Đã xảy ra lỗi khi cập nhật dự án.');
-      }
-  };
-  
-  const handleAddProject = async (project: Omit<Project, 'id'>) => {
-      try {
-        await addDoc(collection(db, 'projects'), project);
-        alert('Dự án đã được tạo thành công!');
-        setView('dashboard');
-      } catch (error) {
-        console.error("Error adding project: ", error);
-        alert('Đã xảy ra lỗi khi tạo dự án.');
-      }
-  };
-
-  const handleUpdateUser = async (user: User) => {
-      try {
-          const userRef = doc(db, 'users', user.id);
-          const { id, ...userData } = user;
-          await updateDoc(userRef, userData);
-          alert('Người dùng đã được cập nhật!');
-          setEditingUser(null);
-      } catch (error) {
-          console.error("Error updating user: ", error);
-          alert('Đã xảy ra lỗi khi cập nhật người dùng.');
-      }
-  };
-
-  const handleDeleteProject = (projectId: string, projectName: string) => {
-    if (!permissions.canDeleteProject(currentUser)) {
-      alert("Bạn không có quyền thực hiện hành động này.");
-      return;
-    }
-
-    const deletionLogic = async () => {
-        try {
-            // First, delete all associated reports
-            const reportsQuery = query(collection(db, 'reports'), where('projectId', '==', projectId));
-            const reportSnapshot = await getDocs(reportsQuery);
-            const batch = writeBatch(db);
-            reportSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            await batch.commit();
-
-            // Then, delete the project itself
-            const projectRef = doc(db, 'projects', projectId);
-            await deleteDoc(projectRef);
-
-            alert(`Dự án "${projectName}" đã được xóa thành công.`);
+        // Fetch projects with real-time updates
+        const projectsQuery = query(collection(db, 'projects'), orderBy('name'));
+        const projectsUnsubscribe = onSnapshot(projectsQuery, (snapshot) => {
+            const allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
             
-            // If deleting from details view, navigate back to dashboard
-            if (view === 'projectDetails') {
+            if (permissions.canAddProject(currentUser)) { // Admin, DeptHead see all
+                setProjects(allProjects);
+            } else { // Filter for assigned projects for other roles
+                const visibleProjects = allProjects.filter(p => 
+                    p.projectManagerIds.includes(currentUser.id) || p.leadSupervisorIds.includes(currentUser.id)
+                );
+                setProjects(visibleProjects);
+            }
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching projects:", error);
+            setIsLoading(false);
+        });
+
+        // Fetch reports with real-time updates
+        const reportsQuery = query(collection(db, 'reports'), orderBy('date', 'desc'));
+        const reportsUnsubscribe = onSnapshot(reportsQuery, (snapshot) => {
+            const allReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyReport));
+            setReports(allReports);
+        }, (error) => console.error("Error fetching reports:", error));
+
+        // Fetch all users for name lookups and management
+        const usersQuery = query(collection(db, 'users'), orderBy('name'));
+        const usersUnsubscribe = onSnapshot(usersQuery, (snapshot) => {
+            const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsers(allUsers);
+        }, (error) => console.error("Error fetching users:", error));
+
+        return () => {
+            projectsUnsubscribe();
+            reportsUnsubscribe();
+            usersUnsubscribe();
+        };
+    }, [currentUser]);
+
+
+    // Memoized derived state
+    const selectedProject = useMemo(() => {
+        return projects.find(p => p.id === selectedProjectId);
+    }, [projects, selectedProjectId]);
+
+    const reportsForSelectedProject = useMemo(() => {
+        if (!selectedProjectId) return [];
+        return reports
+            .filter(r => r.projectId === selectedProjectId)
+            .sort((a, b) => { // Sort by date DD/MM/YYYY descending
+                const [dayA, monthA, yearA] = a.date.split('/').map(Number);
+                const [dayB, monthB, yearB] = b.date.split('/').map(Number);
+                return new Date(yearB, monthB - 1, dayB).getTime() - new Date(yearA, monthA - 1, dayA).getTime();
+            });
+    }, [reports, selectedProjectId]);
+
+    // Auth handlers
+    const handleLogin = async (email: string, password: string) => {
+        setAuthError(null);
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error: any) {
+            console.error(error);
+            setAuthError("Email hoặc mật khẩu không đúng.");
+        }
+    };
+
+    const handleLogout = async () => {
+        await signOut(auth);
+        setCurrentUser(null);
+        setView('dashboard');
+        setSelectedProjectId(null);
+    };
+
+    // Project handlers
+    const handleAddProject = async (projectData: Omit<Project, 'id'>) => {
+        try {
+            await addDoc(collection(db, 'projects'), projectData);
+            setView('dashboard');
+        } catch (error) {
+            console.error("Error adding project:", error);
+            alert("Failed to add project. See console for details.");
+        }
+    };
+
+    const handleUpdateProject = async (projectData: Project) => {
+         try {
+            const projectRef = doc(db, 'projects', projectData.id);
+            const { id, ...dataToUpdate } = projectData;
+            await updateDoc(projectRef, dataToUpdate);
+        } catch (error) {
+            console.error("Error updating project:", error);
+            alert("Failed to update project. See console for details.");
+        }
+    };
+
+    const handleDeleteProject = (projectId: string, projectName: string) => {
+        setProjectToDelete({ id: projectId, name: projectName });
+    };
+
+    const confirmDeleteProject = async () => {
+        if (!projectToDelete) return;
+        try {
+            await deleteDoc(doc(db, 'projects', projectToDelete.id));
+            setProjectToDelete(null);
+            if (selectedProjectId === projectToDelete.id) {
                 setView('dashboard');
                 setSelectedProjectId(null);
             }
         } catch (error) {
-            console.error("Error deleting project and its reports: ", error);
-            alert('Đã xảy ra lỗi khi xóa dự án.');
-        } finally {
-            setConfirmation(null); // Close the modal
+            console.error("Error deleting project:", error);
+            alert("Failed to delete project. See console for details.");
+            setProjectToDelete(null);
         }
     };
     
-    setConfirmation({
-        message: `Bạn có chắc chắn muốn xóa dự án "${projectName}" không?\nHành động này không thể hoàn tác và sẽ xóa tất cả các báo cáo liên quan.`,
-        onConfirm: deletionLogic,
-    });
-  };
-
-
-  // The displayedProjects logic can now be simplified as the fetching logic already filters the data.
-  const displayedProjects = projects;
-
-  const selectedProject = useMemo(() => {
-    return projects.find(p => p.id === selectedProjectId);
-  }, [selectedProjectId, projects]);
-
-  const reportsForSelectedProject = useMemo(() => {
-    return reports.filter(r => r.projectId === selectedProjectId);
-  }, [selectedProjectId, reports]);
-
-  // Render logic
-  if (isAuthLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-base-200">Đang tải ứng dụng...</div>;
-  }
-
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} error={authError} />;
-  }
-
-  const canViewAdminButtons = permissions.canViewDashboardAdminButtons(currentUser);
-
-  const renderContent = () => {
-    if (isDataLoading && view === 'dashboard') {
-        return <p>Đang tải dự án...</p>;
-    }
-
-    switch (view) {
-      case 'dashboard':
-        return (
-          <div className="space-y-6 animate-fade-in">
-             <div className="flex flex-wrap justify-between items-center gap-4">
-                <h1 className="text-3xl font-bold text-gray-800">Danh sách Dự án</h1>
-                {canViewAdminButtons && (
-                  <div className="flex flex-wrap gap-2 sm:gap-4">
-                     <button 
-                        onClick={() => setView('userManagement')}
-                        className="bg-accent text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
-                    >
-                        Quản lý Người dùng
-                    </button>
-                    <button 
-                        onClick={() => setView('addProject')}
-                        className="bg-primary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
-                    >
-                        Thêm Dự án
-                    </button>
-                  </div>
-                )}
-            </div>
-            {displayedProjects.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {displayedProjects.map(project => (
-                  <ProjectCard 
-                    key={project.id} 
-                    project={project} 
-                    currentUser={currentUser}
-                    onSelectProject={handleSelectProject} 
-                    onDeleteProject={handleDeleteProject}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 mt-4">Không có dự án nào được tìm thấy.</p>
-            )}
-          </div>
-        );
-
-      case 'projectDetails':
-        if (selectedProject) {
-            return (
-              <ProjectDetails
-                project={selectedProject}
-                reports={reportsForSelectedProject}
-                currentUser={currentUser}
-                users={users}
-                onBack={() => { setView('dashboard'); setSelectedProjectId(null); }}
-                onAddReport={handleAddReport}
-                onUpdateProject={handleUpdateProject}
-                onDeleteProject={handleDeleteProject}
-              />
-            );
+    // Report handler
+    const handleAddReport = async (reportData: Omit<DailyReport, 'id'>) => {
+        try {
+            await addDoc(collection(db, 'reports'), reportData);
+        } catch (error) {
+            console.error("Error adding report:", error);
+            alert("Failed to add report. See console for details.");
         }
-        // Fallback if project is not found
+    };
+
+    // User handlers
+    const handleUpdateUser = async (userData: User) => {
+        try {
+            const userRef = doc(db, 'users', userData.id);
+            const { id, ...dataToUpdate } = userData;
+            await updateDoc(userRef, dataToUpdate);
+        } catch (error) {
+            console.error("Error updating user:", error);
+            alert("Failed to update user. See console for details.");
+        }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+        if (currentUser && userId === currentUser.id) {
+            alert("You cannot delete yourself.");
+            return;
+        }
+        try {
+            // NOTE: This only deletes the Firestore user document, not the Firebase Auth user.
+            // A Cloud Function would be needed for a complete user deletion.
+            await deleteDoc(doc(db, 'users', userId));
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            alert("Failed to delete user. See console for details.");
+        }
+    };
+
+    // Navigation handlers
+    const handleSelectProject = (projectId: string) => {
+        setSelectedProjectId(projectId);
+        setView('projectDetails');
+    };
+
+    const handleBackToDashboard = () => {
+        setSelectedProjectId(null);
         setView('dashboard');
-        return null;
-      
-      case 'addProject':
-        return (
-            <AddProjectForm 
-                onAddProject={handleAddProject}
-                onCancel={() => setView('dashboard')}
-                users={users}
-            />
-        );
+    };
 
-      case 'userManagement':
+    // Render logic
+    if (isLoading && !currentUser) {
         return (
-          <div className="animate-fade-in max-w-4xl mx-auto">
-              <button 
-                onClick={() => setView('dashboard')}
-                className="text-secondary hover:text-accent font-semibold mb-6 flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                  Trở về Dashboard
-              </button>
-              {editingUser ? (
-                  <EditUserForm 
-                    user={editingUser}
-                    onUpdateUser={handleUpdateUser}
-                    onCancel={() => setEditingUser(null)}
-                  />
-              ) : (
-                  <UserList users={users} onEditUser={setEditingUser} />
-              )}
-          </div>
+            <div className="min-h-screen flex items-center justify-center bg-base-200">
+                <p className="text-xl">Đang tải ứng dụng...</p>
+            </div>
         );
-      
-      default:
-        return <p>Lỗi: Chế độ xem không hợp lệ.</p>;
     }
-  };
 
-  return (
-    <div className="min-h-screen bg-base-200 font-sans">
-      <Header user={currentUser} onLogout={handleLogout} />
-      <main className="p-4 sm:p-6 lg:p-8">
-        {renderContent()}
-      </main>
-      {confirmation && (
-        <ConfirmationModal 
-          message={confirmation.message}
-          onConfirm={confirmation.onConfirm}
-          onCancel={() => setConfirmation(null)}
-          confirmText="Xóa"
-        />
-      )}
-    </div>
-  );
+    if (!currentUser) {
+        return <Login onLogin={handleLogin} error={authError} />;
+    }
+
+    const renderContent = () => {
+        switch (view) {
+            case 'projectDetails':
+                if (selectedProject) {
+                    return (
+                        <ProjectDetails
+                            project={selectedProject}
+                            reports={reportsForSelectedProject}
+                            currentUser={currentUser}
+                            users={users}
+                            onBack={handleBackToDashboard}
+                            onAddReport={handleAddReport}
+                            onUpdateProject={handleUpdateProject}
+                            onDeleteProject={handleDeleteProject}
+                        />
+                    );
+                }
+                // If project not found (e.g., deleted), go back to dashboard
+                handleBackToDashboard();
+                return null;
+            case 'addProject':
+                 return <AddProjectForm onAddProject={handleAddProject} onCancel={handleBackToDashboard} users={users} />;
+            case 'userManagement':
+                return <UserManagement users={users} currentUser={currentUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onBack={handleBackToDashboard} />;
+            case 'dashboard':
+            default:
+                return (
+                    <div>
+                        <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                            <h2 className="text-3xl font-bold text-gray-800">Danh sách Dự án</h2>
+                            <div className="flex gap-2 sm:gap-4">
+                                {permissions.canManageUsers(currentUser) && (
+                                    <button onClick={() => setView('userManagement')} className="bg-neutral text-primary font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">
+                                        Quản lý User
+                                    </button>
+                                )}
+                                {permissions.canAddProject(currentUser) && (
+                                    <button onClick={() => setView('addProject')} className="bg-primary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity">
+                                        Thêm Dự án +
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        {isLoading ? <p>Đang tải dự án...</p> : projects.length > 0 ? (
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {projects.map(project => (
+                                    <ProjectCard
+                                        key={project.id}
+                                        project={project}
+                                        currentUser={currentUser}
+                                        onSelectProject={handleSelectProject}
+                                        onDeleteProject={handleDeleteProject}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-10 bg-base-100 rounded-lg shadow-md">
+                                <h3 className="text-lg font-medium text-gray-900">Không tìm thấy dự án nào.</h3>
+                                {permissions.canAddProject(currentUser) 
+                                    ? <p className="mt-1 text-sm text-gray-500">Hãy bắt đầu bằng cách thêm một dự án mới.</p>
+                                    : <p className="mt-1 text-sm text-gray-500">Bạn chưa được gán vào dự án nào.</p>
+                                }
+                            </div>
+                        )}
+                    </div>
+                );
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-base-200 text-base-content font-sans">
+            <Header user={currentUser} onLogout={handleLogout} />
+            <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+                {renderContent()}
+            </main>
+            {projectToDelete && (
+                 <ConfirmationModal
+                    message={`Bạn có chắc chắn muốn xóa dự án "${projectToDelete.name}"?\nHành động này không thể hoàn tác.`}
+                    onConfirm={confirmDeleteProject}
+                    onCancel={() => setProjectToDelete(null)}
+                />
+            )}
+        </div>
+    );
 };
 
 export default App;

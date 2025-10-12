@@ -88,7 +88,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   const handleGenerateSummary = () => {
     if (reports.length > 0) {
       setIsGeneratingSummary(true);
-      generateProjectSummary(project.name, reports)
+      generateProjectSummary(project, reports)
         .then(setSummary)
         .catch(err => {
           console.error(err);
