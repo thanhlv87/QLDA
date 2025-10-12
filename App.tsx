@@ -1,316 +1,352 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  collection,
+  query,
+  onSnapshot,
+  doc,
+  getDoc,
+  addDoc,
+  updateDoc,
+  orderBy,
+  where,
+  Query,
+  DocumentData,
+} from 'firebase/firestore';
+import { auth, db } from './services/firebase';
+import { permissions } from './services/permissions';
 import type { User, Project, DailyReport } from './types';
 import { Role } from './types';
+import Login from './components/Login';
 import Header from './components/Header';
 import ProjectCard from './components/ProjectCard';
 import ProjectDetails from './components/ProjectDetails';
-import AddUserForm from './components/AddUserForm';
-import EditUserForm from './components/EditUserForm';
 import UserList from './components/UserList';
-
-// --- MOCK DATA ---
-// In a real application, this data would come from a Firebase backend.
-
-const MOCK_USERS_DATA: User[] = [
-  { id: 'user-1', name: 'Nguyễn Văn A', role: Role.Admin, username: 'admin', password: 'password' },
-  { id: 'user-2', name: 'Trần Thị B', role: Role.DepartmentHead, username: 'headb', password: 'password' },
-  { id: 'user-3', name: 'Lê Văn C', role: Role.ProjectManager, username: 'managerc', password: 'password' },
-  { id: 'user-4', name: 'Phạm Thị D', role: Role.LeadSupervisor, username: 'supervisord', password: 'password' },
-  { id: 'user-5', name: 'Võ Văn E', role: Role.LeadSupervisor, username: 'supervisore', password: 'password' },
-  { id: 'user-6', name: 'Đặng Thị F', role: Role.ProjectManager, username: 'managerf', password: 'password' },
-];
-
-const MOCK_PROJECTS: Project[] = [
-  {
-    id: 'proj-hg',
-    name: '2025-SCL-Kiến trúc Hà Giang',
-    capitalPlanApproval: { decisionNumber: '12/QĐ-BQP', date: '10/01/2025' },
-    technicalPlanApproval: { decisionNumber: '34/QĐ-TCT', date: '20/01/2025' },
-    budgetApproval: { decisionNumber: '56/QĐ-TCT', date: '01/02/2025' },
-    constructionStartDate: '15/02/2025',
-    plannedAcceptanceDate: '15/08/2025',
-    designUnit: { name: 'Công ty TK Xây Dựng ABC', phone: '0901234567' },
-    constructionUnit: { name: 'Công ty XD Thăng Long', phone: '0912345678' },
-    supervisionUnit: { name: 'Công ty GS Chất Lượng XYZ', phone: '0987654321' },
-    projectManagerIds: ['user-3'],
-    leadSupervisorIds: ['user-4'],
-  },
-  {
-    id: 'proj-tn',
-    name: '2025-SCL-Kiến trúc Thái Nguyên',
-    capitalPlanApproval: { decisionNumber: '15/QĐ-BQP', date: '15/01/2025' },
-    technicalPlanApproval: { decisionNumber: '40/QĐ-TCT', date: '25/01/2025' },
-    budgetApproval: { decisionNumber: '61/QĐ-TCT', date: '05/02/2025' },
-    constructionStartDate: '20/02/2025',
-    plannedAcceptanceDate: '20/09/2025',
-    designUnit: { name: 'Viện Thiết Kế An Toàn', phone: '0901122334' },
-    constructionUnit: { name: 'Công ty PCCC Số 1', phone: '0913344556' },
-    supervisionUnit: { name: 'Đơn vị Giám Sát PCCC', phone: '0988899900' },
-    projectManagerIds: ['user-6'],
-    leadSupervisorIds: ['user-5'],
-  },
-  {
-    id: 'proj-th',
-    name: '2025-SCL-Kiến trúc Thanh Hóa',
-    capitalPlanApproval: { decisionNumber: '21/QĐ-BQP', date: '01/02/2025' },
-    technicalPlanApproval: { decisionNumber: '55/QĐ-TCT', date: '10/02/2025' },
-    budgetApproval: { decisionNumber: '78/QĐ-TCT', date: '20/02/2025' },
-    constructionStartDate: '01/03/2025',
-    plannedAcceptanceDate: '30/10/2025',
-    designUnit: { name: 'Công ty Cảnh Quan Xanh', phone: '0905556677' },
-    constructionUnit: { name: 'Công ty Thi Công Vườn Đẹp', phone: '0915554433' },
-    supervisionUnit: { name: 'Đơn vị Giám Sát Cây Xanh', phone: '0986667788' },
-    projectManagerIds: ['user-3'],
-    leadSupervisorIds: ['user-5'],
-  },
-  {
-    id: 'proj-nd',
-    name: '2025-SCL-Kiến trúc Nam Định',
-    capitalPlanApproval: { decisionNumber: '25/QĐ-BQP', date: '10/02/2025' },
-    technicalPlanApproval: { decisionNumber: '60/QĐ-TCT', date: '20/02/2025' },
-    budgetApproval: { decisionNumber: '82/QĐ-TCT', date: '01/03/2025' },
-    constructionStartDate: '15/03/2025',
-    plannedAcceptanceDate: '15/11/2025',
-    designUnit: { name: 'Công ty TK Xây Dựng ABC', phone: '0901234567' },
-    constructionUnit: { name: 'Công ty XD Thăng Long', phone: '0912345678' },
-    supervisionUnit: { name: 'Đơn vị Giám Sát PCCC', phone: '0988899900' },
-    projectManagerIds: ['user-6'],
-    leadSupervisorIds: ['user-4'],
-  },
-  {
-    id: 'proj-db',
-    name: '2025-SCL-Kiến trúc Điện Biên',
-    capitalPlanApproval: { decisionNumber: '33/QĐ-BQP', date: '05/03/2025' },
-    technicalPlanApproval: { decisionNumber: '71/QĐ-TCT', date: '15/03/2025' },
-    budgetApproval: { decisionNumber: '99/QĐ-TCT', date: '25/03/2025' },
-    constructionStartDate: '01/04/2025',
-    plannedAcceptanceDate: '01/12/2025',
-    designUnit: { name: 'Viện Thiết Kế An Toàn', phone: '0901122334' },
-    constructionUnit: { name: 'Công ty Thi Công Vườn Đẹp', phone: '0915554433' },
-    supervisionUnit: { name: 'Công ty GS Chất Lượng XYZ', phone: '0987654321' },
-    projectManagerIds: ['user-3', 'user-6'],
-    leadSupervisorIds: ['user-5'],
-  },
-  {
-    id: 'proj-npsc',
-    name: '2025-SCL-Kiến trúc tòa nhà NPSC',
-    capitalPlanApproval: { decisionNumber: '45/QĐ-BQP', date: '20/03/2025' },
-    technicalPlanApproval: { decisionNumber: '88/QĐ-TCT', date: '01/04/2025' },
-    budgetApproval: { decisionNumber: '112/QĐ-TCT', date: '10/04/2025' },
-    constructionStartDate: '20/04/2025',
-    plannedAcceptanceDate: '20/12/2025',
-    designUnit: { name: 'Công ty Cảnh Quan Xanh', phone: '0905556677' },
-    constructionUnit: { name: 'Công ty PCCC Số 1', phone: '0913344556' },
-    supervisionUnit: { name: 'Đơn vị Giám Sát Cây Xanh', phone: '0986667788' },
-    projectManagerIds: ['user-3'],
-    leadSupervisorIds: ['user-4', 'user-5'],
-  },
-];
-
-const MOCK_REPORTS: DailyReport[] = [];
-
-interface NewUserData extends Omit<User, 'id'> {
-  selectedProjectIds: string[];
-}
-
-interface UpdateUserData {
-    userId: string;
-    name: string;
-    role: Role;
-    username: string;
-    selectedProjectIds: string[];
-}
-
+import EditUserForm from './components/EditUserForm';
+import AddProjectForm from './components/AddProjectForm';
 
 const App: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(MOCK_USERS_DATA);
-  const [currentUser, setCurrentUser] = useState<User>(users[0]); // Default to Admin
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
-  const [reports, setReports] = useState<DailyReport[]>(MOCK_REPORTS);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [isAddingUser, setIsAddingUser] = useState<boolean>(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  // Authentication state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const visibleProjects = useMemo(() => {
-    if (!currentUser) return [];
-    switch (currentUser.role) {
-      case Role.Admin:
-      case Role.DepartmentHead:
-        return projects;
-      case Role.ProjectManager:
-        return projects.filter(p => p.projectManagerIds.includes(currentUser.id));
-      case Role.LeadSupervisor:
-        return projects.filter(p => p.leadSupervisorIds.includes(currentUser.id));
-      default:
-        return [];
-    }
-  }, [currentUser, projects]);
+  // Data state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [reports, setReports] = useState<DailyReport[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+
+  // UI state
+  type View = 'dashboard' | 'projectDetails' | 'userManagement' | 'addProject';
+  const [view, setView] = useState<View>('dashboard');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   
-  const isStaffManagementVisible = useMemo(() => {
-    if (!currentUser) return false;
-    return [Role.Admin, Role.DepartmentHead].includes(currentUser.role);
+  const parseDate = (dateStr: string): number => {
+    if (!dateStr || typeof dateStr !== 'string') return 0;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return 0;
+    const [day, month, year] = parts.map(Number);
+    // Handle potential NaN from map
+    if (isNaN(day) || isNaN(month) || isNaN(year)) return 0;
+    return new Date(year, month - 1, day).getTime();
+  };
+
+  // Auth effect
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            setCurrentUser({ id: userDocSnap.id, ...userDocSnap.data() } as User);
+          } else {
+            console.error("User document not found in Firestore.");
+            setCurrentUser(null);
+            await signOut(auth);
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          setCurrentUser(null);
+          await signOut(auth);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Main data fetching effect, now role-aware
+  useEffect(() => {
+    if (!currentUser) {
+      setProjects([]);
+      setReports([]);
+      setUsers([]);
+      if(isDataLoading) setIsDataLoading(false);
+      return;
+    }
+
+    setIsDataLoading(true);
+
+    // 1. Determine the correct projects query based on user role
+    let projectsQuery: Query<DocumentData>;
+    if (currentUser.role === Role.LeadSupervisor) {
+        projectsQuery = query(collection(db, 'projects'), where('leadSupervisorIds', 'array-contains', currentUser.id));
+    } else if (currentUser.role === Role.ProjectManager) {
+        projectsQuery = query(collection(db, 'projects'), where('projectManagerIds', 'array-contains', currentUser.id));
+    } else {
+        // Admins, DeptHeads see all projects
+        projectsQuery = query(collection(db, 'projects'));
+    }
+
+    // 2. Set up the projects listener
+    const unsubProjects = onSnapshot(projectsQuery, (snapshot) => {
+      const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+      projectsData.sort((a, b) => parseDate(b.constructionStartDate) - parseDate(a.constructionStartDate));
+      setProjects(projectsData);
+      setIsDataLoading(false);
+
+      // 3. Once projects are fetched, set up the reports listener based on the visible projects
+      const projectIds = projectsData.map(p => p.id);
+      if (projectIds.length > 0) {
+        const reportsQuery = query(collection(db, 'reports'), where('projectId', 'in', projectIds));
+        const unsubReports = onSnapshot(reportsQuery, (reportSnapshot) => {
+          const reportsData = reportSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyReport));
+          reportsData.sort((a, b) => parseDate(b.date) - parseDate(a.date));
+          setReports(reportsData);
+        }, (error) => console.error("Error fetching reports:", error));
+        
+        return () => unsubReports(); // Cleanup reports listener when projects change
+      } else {
+        setReports([]); // No projects, so no reports
+      }
+    }, (error) => {
+        console.error("Error fetching projects:", error);
+        setIsDataLoading(false);
+    });
+
+    // 4. Set up a separate, conditional listener for the users list
+    let unsubUsers = () => {};
+    if (permissions.canFetchAllUsers(currentUser)) {
+       unsubUsers = onSnapshot(query(collection(db, 'users'), orderBy('name')), (snapshot) => {
+        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        setUsers(usersData);
+      }, (error) => {
+          console.error("Error fetching users:", error);
+      });
+    } else {
+      setUsers([]); // Clear user list for roles without permission
+    }
+    
+
+    return () => {
+      unsubProjects();
+      unsubUsers();
+      // The reports listener is cleaned up inside the projects listener
+    };
   }, [currentUser]);
 
-  const manageableUsers = useMemo(() => {
-    return users.filter(u => u.role === Role.ProjectManager || u.role === Role.LeadSupervisor);
-  }, [users]);
 
-
-  const handleSelectProject = (projectId: string) => {
-    setSelectedProjectId(projectId);
+  // Handlers
+  const handleLogin = async (email: string, password: string) => {
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        setAuthError('Email hoặc mật khẩu không chính xác.');
+      } else {
+        setAuthError('Đã xảy ra lỗi khi đăng nhập.');
+      }
+    }
   };
-  
-  const handleBackToDashboard = () => {
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setView('dashboard');
     setSelectedProjectId(null);
   };
-
-  const handleAddReport = (report: Omit<DailyReport, 'id'>) => {
-    const newReport: DailyReport = {
-        ...report,
-        id: `rep-${Date.now()}`
-    };
-    setReports(prevReports => [newReport, ...prevReports]);
-  };
-
-  const handleAddNewUser = (userData: NewUserData) => {
-    const { selectedProjectIds, ...user } = userData;
-    const newUser: User = {
-      ...user,
-      id: `user-${Date.now()}`,
-    };
-    
-    setUsers(prevUsers => [...prevUsers, newUser]);
-
-    setProjects(prevProjects => {
-        return prevProjects.map(project => {
-            if (selectedProjectIds.includes(project.id)) {
-                if (newUser.role === Role.ProjectManager) {
-                    return { ...project, projectManagerIds: [...project.projectManagerIds, newUser.id] };
-                }
-                if (newUser.role === Role.LeadSupervisor) {
-                    return { ...project, leadSupervisorIds: [...project.leadSupervisorIds, newUser.id] };
-                }
-            }
-            return project;
-        });
-    });
-
-    setIsAddingUser(false);
+  
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setView('projectDetails');
   };
   
-  const handleUpdateUser = (updatedData: UpdateUserData) => {
-    // 1. Update user info in the main users list
-    setUsers(prevUsers =>
-      prevUsers.map(u =>
-        u.id === updatedData.userId ? { ...u, name: updatedData.name, role: updatedData.role, username: updatedData.username } : u
-      )
-    );
-
-    // 2. Update project assignments across all projects
-    setProjects(prevProjects => {
-      return prevProjects.map(project => {
-        // Remove the user from both potential assignment lists first
-        let newProjectManagerIds = project.projectManagerIds.filter(id => id !== updatedData.userId);
-        let newLeadSupervisorIds = project.leadSupervisorIds.filter(id => id !== updatedData.userId);
-
-        // If this project is in the user's new assignment list, add them back to the correct role list
-        if (updatedData.selectedProjectIds.includes(project.id)) {
-          if (updatedData.role === Role.ProjectManager) {
-            newProjectManagerIds.push(updatedData.userId);
-          } else if (updatedData.role === Role.LeadSupervisor) {
-            newLeadSupervisorIds.push(updatedData.userId);
-          }
-        }
-        return { ...project, projectManagerIds: newProjectManagerIds, leadSupervisorIds: newLeadSupervisorIds };
-      });
-    });
-
-    setEditingUser(null); // Close the form
+  const handleAddReport = async (report: Omit<DailyReport, 'id'>) => {
+    try {
+        await addDoc(collection(db, 'reports'), report);
+        alert('Báo cáo đã được thêm thành công!');
+    } catch (error) {
+        console.error("Error adding report: ", error);
+        alert('Đã xảy ra lỗi khi thêm báo cáo.');
+    }
   };
 
-  const handleUpdateProject = (updatedProject: Project) => {
-    setProjects(prevProjects =>
-      prevProjects.map(p => (p.id === updatedProject.id ? updatedProject : p))
-    );
+  const handleUpdateProject = async (project: Project) => {
+      try {
+          const projectRef = doc(db, 'projects', project.id);
+          const { id, ...projectData } = project;
+          await updateDoc(projectRef, projectData);
+          alert('Dự án đã được cập nhật thành công!');
+          // No need to change view, it should stay on details
+      } catch (error) {
+          console.error("Error updating project: ", error);
+          alert('Đã xảy ra lỗi khi cập nhật dự án.');
+      }
+  };
+  
+  const handleAddProject = async (project: Omit<Project, 'id'>) => {
+      try {
+        await addDoc(collection(db, 'projects'), project);
+        alert('Dự án đã được tạo thành công!');
+        setView('dashboard');
+      } catch (error) {
+        console.error("Error adding project: ", error);
+        alert('Đã xảy ra lỗi khi tạo dự án.');
+      }
   };
 
-  const handleSetCurrentUser = (user: User) => {
-    setCurrentUser(user);
-    // Close any open forms when switching users
-    setIsAddingUser(false);
-    setEditingUser(null);
+  const handleUpdateUser = async (user: User) => {
+      try {
+          const userRef = doc(db, 'users', user.id);
+          const { id, ...userData } = user;
+          await updateDoc(userRef, userData);
+          alert('Người dùng đã được cập nhật!');
+          setEditingUser(null);
+      } catch (error) {
+          console.error("Error updating user: ", error);
+          alert('Đã xảy ra lỗi khi cập nhật người dùng.');
+      }
+  };
+
+  // The displayedProjects logic can now be simplified as the fetching logic already filters the data.
+  const displayedProjects = projects;
+
+  const selectedProject = useMemo(() => {
+    return projects.find(p => p.id === selectedProjectId);
+  }, [selectedProjectId, projects]);
+
+  const reportsForSelectedProject = useMemo(() => {
+    return reports.filter(r => r.projectId === selectedProjectId);
+  }, [selectedProjectId, reports]);
+
+  // Render logic
+  if (isAuthLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-base-200">Đang tải ứng dụng...</div>;
   }
 
-  const handleStartEdit = (user: User) => {
-    setIsAddingUser(false); // Make sure add form is closed
-    setEditingUser(user);
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} error={authError} />;
   }
 
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
-  const selectedProjectReports = reports
-    .filter(r => r.projectId === selectedProjectId)
-    .sort((a, b) => new Date(b.date.split('/').reverse().join('-')).getTime() - new Date(a.date.split('/').reverse().join('-')).getTime());
+  const canViewAdminButtons = permissions.canViewDashboardAdminButtons(currentUser);
 
-  return (
-    <div className="min-h-screen bg-neutral">
-      <Header currentUser={currentUser} setCurrentUser={handleSetCurrentUser} users={users} />
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {!selectedProject ? (
-            <div>
-                 {isStaffManagementVisible && (
-                    <div className="mb-8 p-6 bg-base-100 rounded-lg shadow-md border border-gray-200">
-                        <div className="flex justify-between items-center">
-                             <h3 className="text-2xl font-bold text-gray-800">Quản lý Nhân sự</h3>
-                             <button 
-                                onClick={() => { setIsAddingUser(true); setEditingUser(null); }}
-                                disabled={isAddingUser || !!editingUser}
-                                className="bg-accent text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity disabled:bg-gray-400 disabled:cursor-not-allowed"
-                            >
-                                + Thêm Nhân sự
-                            </button>
-                        </div>
-                        
-                        {isAddingUser && (
-                            <AddUserForm 
-                                onAddUser={handleAddNewUser} 
-                                onCancel={() => setIsAddingUser(false)}
-                                projects={projects}
-                            />
-                        )}
+  const renderContent = () => {
+    if (isDataLoading && view === 'dashboard') {
+        return <p>Đang tải dự án...</p>;
+    }
 
-                        {editingUser && (
-                            <EditUserForm 
-                                user={editingUser}
-                                projects={projects}
-                                onUpdateUser={handleUpdateUser}
-                                onCancel={() => setEditingUser(null)}
-                            />
-                        )}
-
-                        {!isAddingUser && !editingUser && (
-                           <UserList users={manageableUsers} onEditUser={handleStartEdit} />
-                        )}
-                    </div>
-                 )}
-
-                 <h2 className="text-3xl font-bold text-gray-800 mb-6">Danh sách dự án</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {visibleProjects.map(project => (
-                        <ProjectCard key={project.id} project={project} onSelectProject={handleSelectProject} />
-                    ))}
-                 </div>
+    switch (view) {
+      case 'dashboard':
+        return (
+          <div className="space-y-6 animate-fade-in">
+             <div className="flex flex-wrap justify-between items-center gap-4">
+                <h1 className="text-3xl font-bold text-gray-800">Danh sách Dự án</h1>
+                {canViewAdminButtons && (
+                  <div className="flex flex-wrap gap-2 sm:gap-4">
+                     <button 
+                        onClick={() => setView('userManagement')}
+                        className="bg-accent text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
+                    >
+                        Quản lý Người dùng
+                    </button>
+                    <button 
+                        onClick={() => setView('addProject')}
+                        className="bg-primary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
+                    >
+                        Thêm Dự án
+                    </button>
+                  </div>
+                )}
             </div>
-        ) : (
-            <ProjectDetails 
-                project={selectedProject} 
-                reports={selectedProjectReports}
+            {displayedProjects.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {displayedProjects.map(project => (
+                  <ProjectCard key={project.id} project={project} onSelectProject={handleSelectProject} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 mt-4">Không có dự án nào được tìm thấy.</p>
+            )}
+          </div>
+        );
+
+      case 'projectDetails':
+        if (selectedProject) {
+            return (
+              <ProjectDetails
+                project={selectedProject}
+                reports={reportsForSelectedProject}
                 currentUser={currentUser}
                 users={users}
-                onBack={handleBackToDashboard}
+                onBack={() => { setView('dashboard'); setSelectedProjectId(null); }}
                 onAddReport={handleAddReport}
                 onUpdateProject={handleUpdateProject}
+              />
+            );
+        }
+        // Fallback if project is not found
+        setView('dashboard');
+        return null;
+      
+      case 'addProject':
+        return (
+            <AddProjectForm 
+                onAddProject={handleAddProject}
+                onCancel={() => setView('dashboard')}
+                users={users}
             />
-        )}
+        );
+
+      case 'userManagement':
+        return (
+          <div className="animate-fade-in max-w-4xl mx-auto">
+              <button 
+                onClick={() => setView('dashboard')}
+                className="text-secondary hover:text-accent font-semibold mb-6 flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                  Trở về Dashboard
+              </button>
+              {editingUser ? (
+                  <EditUserForm 
+                    user={editingUser}
+                    onUpdateUser={handleUpdateUser}
+                    onCancel={() => setEditingUser(null)}
+                  />
+              ) : (
+                  <UserList users={users} onEditUser={setEditingUser} />
+              )}
+          </div>
+        );
+      
+      default:
+        return <p>Lỗi: Chế độ xem không hợp lệ.</p>;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-base-200 font-sans">
+      <Header user={currentUser} onLogout={handleLogout} />
+      <main className="p-4 sm:p-6 lg:p-8">
+        {renderContent()}
       </main>
     </div>
   );

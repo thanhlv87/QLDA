@@ -1,5 +1,5 @@
 {
-  "name": "Project Management Dashboard",
+  "name": "QLDA - NPSC",
   "description": "An application to manage large-scale architectural repair projects, track daily progress with image reports, and provide role-based access for project managers, supervisors, and department heads. Includes an AI-powered summary feature using the Gemini API.",
   "requestFramePermissions": []
 }

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import type { Project, DailyReport, User } from '../types';
-import { Role } from '../types';
 import ReportCard from './ReportCard';
 import EditProjectForm from './EditProjectForm';
 import { generateProjectSummary } from '../services/geminiService';
+import { permissions } from '../services/permissions';
 
 interface ImageLightboxProps {
   imageUrl: string;
@@ -98,17 +98,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     }
   };
 
-
-  const canAddReport = currentUser &&
-    (currentUser.role === Role.ProjectManager || currentUser.role === Role.LeadSupervisor) &&
-    (project.projectManagerIds.includes(currentUser.id) || project.leadSupervisorIds.includes(currentUser.id));
-    
-  const canEditProject = currentUser && (
-    currentUser.role === Role.Admin || 
-    currentUser.role === Role.DepartmentHead ||
-    (currentUser.role === Role.ProjectManager && project.projectManagerIds.includes(currentUser.id))
-  );
-
   const handleAddReportSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newReportTasks.trim() || !currentUser) {
@@ -200,7 +189,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
 
 
   if (isEditing) {
-    return <EditProjectForm project={project} onUpdateProject={handleUpdateProject} onCancel={() => setIsEditing(false)} />;
+    return <EditProjectForm project={project} onUpdateProject={handleUpdateProject} onCancel={() => setIsEditing(false)} users={users} />;
   }
 
   const TabButton: React.FC<{
@@ -242,7 +231,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             </button>
             <h2 className="text-3xl font-bold text-gray-800">{project.name}</h2>
         </div>
-        {canEditProject && (
+        {permissions.canEditProject(currentUser, project) && (
             <button 
                 onClick={() => setIsEditing(true)}
                 className="bg-accent text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
@@ -383,7 +372,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
         )}
         {activeTab === 'reports' && (
             <div role="tabpanel" className="animate-fade-in">
-              {canAddReport && (
+              {permissions.canAddReport(currentUser, project) && (
                 <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 mb-8">
                   <h4 className="text-lg font-bold text-primary mb-4">Gửi báo cáo mới</h4>
                   <form onSubmit={handleAddReportSubmit} className="space-y-4">
@@ -427,26 +416,18 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                       )}
                       
                       <div className="flex items-center space-x-4">
-                          <label htmlFor="imageUpload" className="cursor-pointer bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                          <label htmlFor="imageUpload" className="cursor-pointer bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">
                               <span>Chọn ảnh...</span>
-                              <input id="imageUpload" name="imageUpload" type="file" className="sr-only" multiple accept="image/*" onChange={handleImageChange} disabled={isProcessingImages} />
+                              <input id="imageUpload" name="imageUpload" type="file" className="sr-only" multiple accept="image/*" onChange={handleImageChange} />
                           </label>
-                          {isProcessingImages && (
-                              <div className="flex items-center space-x-2 text-sm text-gray-500">
-                                  <svg className="animate-spin h-4 w-4 text-secondary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                  <span>Đang xử lý...</span>
-                              </div>
-                          )}
+                           {isProcessingImages && <div className="text-sm text-gray-500">Đang xử lý...</div>}
                       </div>
-                       <p className="text-xs text-gray-500 mt-2">Bạn có thể chọn nhiều ảnh. Ảnh sẽ được tối ưu hóa dung lượng khi tải lên.</p>
                     </div>
-                    <div className="flex justify-end">
+                    <div>
                       <button
                         type="submit"
-                        className="bg-secondary text-white font-bold py-2 px-6 rounded-md hover:bg-primary transition-colors"
+                        disabled={isProcessingImages}
+                        className="bg-success text-white font-bold py-2 px-6 rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
                         Gửi Báo cáo
                       </button>
@@ -454,19 +435,27 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                   </form>
                 </div>
               )}
-
               <div className="space-y-6">
                 {reports.length > 0 ? (
-                  reports.map(report => <ReportCard key={report.id} report={report} onViewImage={setViewingImage} />)
+                  reports.map(report => (
+                    <ReportCard key={report.id} report={report} onViewImage={(img) => setViewingImage(img)} />
+                  ))
                 ) : (
-                  <div className="text-center py-10 px-6 bg-base-100 rounded-lg shadow-md border border-gray-200">
-                      <p className="text-gray-500">Chưa có báo cáo nào cho dự án này.</p>
+                  <div className="text-center py-10 bg-base-100 rounded-lg shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có báo cáo nào</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {permissions.canAddReport(currentUser, project) ? 'Hãy gửi báo cáo đầu tiên cho dự án này.' : 'Khi có báo cáo mới, chúng sẽ xuất hiện ở đây.'}
+                    </p>
                   </div>
                 )}
               </div>
             </div>
         )}
       </div>
+
     </div>
   );
 };

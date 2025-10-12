@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import type { Project, User } from '../types';
 import { Role } from '../types';
 
-interface EditProjectFormProps {
-    project: Project;
-    onUpdateProject: (project: Project) => void;
+interface AddProjectFormProps {
+    onAddProject: (project: Omit<Project, 'id'>) => void;
     onCancel: () => void;
     users: User[];
 }
@@ -21,27 +20,39 @@ const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: str
     </div>
 );
 
+const toYMD = (dmy: string): string => {
+    if (!dmy || typeof dmy !== 'string') return '';
+    const parts = dmy.split('/');
+    if (parts.length !== 3) return '';
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+};
 
-const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProject, onCancel, users }) => {
-    const [formData, setFormData] = useState<Project>(project);
+const toDMY = (ymd: string): string => {
+    if (!ymd || typeof ymd !== 'string') return '';
+    const parts = ymd.split('-');
+    if (parts.length !== 3) return '';
+    const [year, month, day] = parts;
+    return `${day.padStart(2,'0')}/${month.padStart(2,'0')}/${year}`;
+};
 
-    // Helper to convert DD/MM/YYYY to YYYY-MM-DD for date input value
-    const toYMD = (dmy: string): string => {
-        if (!dmy || typeof dmy !== 'string') return '';
-        const parts = dmy.split('/');
-        if (parts.length !== 3) return '';
-        const [day, month, year] = parts;
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    };
-    
-    // Helper to convert YYYY-MM-DD from date input to DD/MM/YYYY for state
-    const toDMY = (ymd: string): string => {
-        if (!ymd || typeof ymd !== 'string') return '';
-        const parts = ymd.split('-');
-        if (parts.length !== 3) return '';
-        const [year, month, day] = parts;
-        return `${day}/${month}/${year}`;
-    };
+const initialState: Omit<Project, 'id'> = {
+  name: '',
+  projectManagerIds: [],
+  leadSupervisorIds: [],
+  constructionStartDate: '',
+  plannedAcceptanceDate: '',
+  capitalPlanApproval: { decisionNumber: '', date: '' },
+  technicalPlanApproval: { decisionNumber: '', date: '' },
+  budgetApproval: { decisionNumber: '', date: '' },
+  designUnit: { name: '', phone: '' },
+  constructionUnit: { name: '', phone: '' },
+  supervisionUnit: { name: '', phone: '' }
+};
+
+
+const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel, users }) => {
+    const [formData, setFormData] = useState<Omit<Project, 'id'>>(initialState);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type } = e.target;
@@ -52,8 +63,10 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             setFormData(prev => ({
                 ...prev,
                 [keys[0]]: {
-                    // @ts-ignore
-                    ...prev[keys[0]],
+                    // Fix: The type of `prev[keys[0]]` is a union that includes non-object types,
+                    // which cannot be spread. Since the logic ensures this code path only runs for
+                    // nested objects, we cast it to `Record<string, any>` to satisfy TypeScript.
+                    ...(prev[keys[0] as keyof typeof prev] as Record<string, any>),
                     [keys[1]]: finalValue
                 }
             }));
@@ -64,7 +77,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             }));
         }
     };
-
+    
     const handleMultiSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const { name, options } = e.target;
         const value = Array.from(options)
@@ -75,26 +88,24 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onUpdateProject(formData);
+        onAddProject(formData);
     };
 
     const projectManagers = users.filter(u => u.role === Role.ProjectManager);
     const leadSupervisors = users.filter(u => u.role === Role.LeadSupervisor);
 
     return (
-        <div className="bg-base-100 p-6 sm:p-8 rounded-lg shadow-lg border border-gray-200 animate-fade-in">
+        <div className="bg-base-100 p-6 sm:p-8 rounded-lg shadow-lg border border-gray-200 animate-fade-in max-w-4xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-primary">Chỉnh sửa dự án</h2>
-                <button onClick={onCancel} className="text-gray-500 hover:text-gray-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                <h2 className="text-2xl font-bold text-primary">Thêm dự án mới</h2>
+                <button onClick={onCancel} className="text-gray-500 hover:text-gray-800 font-semibold">
+                    &larr; Quay lại
                 </button>
             </div>
-            <p className="text-lg text-gray-600 mb-6">{project.name}</p>
 
             <form onSubmit={handleSubmit} className="space-y-8">
-
+                 <Input label="Tên Dự án" name="name" value={formData.name} onChange={handleChange} required />
+                
                  <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Nhân sự Phụ trách</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
@@ -130,7 +141,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                         </div>
                     </div>
                 </fieldset>
-                
+
                 <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Thông tin Phê duyệt</legend>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
@@ -155,8 +166,8 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                  <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Mốc thời gian</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                        <Input label="Ngày triển khai thi công" name="constructionStartDate" value={toYMD(formData.constructionStartDate)} onChange={handleChange} type="date" />
-                        <Input label="Ngày nghiệm thu theo kế hoạch" name="plannedAcceptanceDate" value={toYMD(formData.plannedAcceptanceDate)} onChange={handleChange} type="date" />
+                        <Input label="Ngày triển khai thi công" name="constructionStartDate" value={toYMD(formData.constructionStartDate)} onChange={handleChange} type="date" required />
+                        <Input label="Ngày nghiệm thu theo kế hoạch" name="plannedAcceptanceDate" value={toYMD(formData.plannedAcceptanceDate)} onChange={handleChange} type="date" required />
                     </div>
                 </fieldset>
 
@@ -193,7 +204,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                         type="submit"
                         className="bg-success text-white font-bold py-2 px-6 rounded-md hover:bg-green-700 transition-colors"
                     >
-                        Lưu Thay Đổi
+                        Tạo Dự án
                     </button>
                 </div>
             </form>
@@ -201,4 +212,4 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
     );
 }
 
-export default EditProjectForm;
+export default AddProjectForm;

@@ -1,48 +1,47 @@
 export enum Role {
   Admin = 'Admin',
-  DepartmentHead = 'Lãnh đạo phòng',
-  ProjectManager = 'Cán bộ quản lý dự án',
-  LeadSupervisor = 'Giám sát trưởng',
+  DepartmentHead = 'DepartmentHead',
+  ProjectManager = 'ProjectManager',
+  LeadSupervisor = 'LeadSupervisor',
 }
 
 export interface User {
   id: string;
+  email: string;
   name: string;
   role: Role;
-  username?: string;
-  password?: string;
 }
 
-export interface Contact {
+export interface Approval {
+  decisionNumber: string;
+  date: string; // Format: DD/MM/YYYY
+}
+
+export interface ContactUnit {
   name: string;
   phone: string;
-}
-
-export interface ApprovalInfo {
-  decisionNumber: string;
-  date: string;
 }
 
 export interface Project {
   id: string;
   name: string;
-  capitalPlanApproval: ApprovalInfo;
-  technicalPlanApproval: ApprovalInfo;
-  budgetApproval: ApprovalInfo;
-  constructionStartDate: string;
-  plannedAcceptanceDate: string;
-  designUnit: Contact;
-  constructionUnit: Contact;
-  supervisionUnit: Contact;
   projectManagerIds: string[];
   leadSupervisorIds: string[];
+  constructionStartDate: string; // Format: DD/MM/YYYY
+  plannedAcceptanceDate: string; // Format: DD/MM/YYYY
+  capitalPlanApproval: Approval;
+  technicalPlanApproval: Approval;
+  budgetApproval: Approval;
+  designUnit: ContactUnit;
+  constructionUnit: ContactUnit;
+  supervisionUnit: ContactUnit;
 }
 
 export interface DailyReport {
   id: string;
   projectId: string;
-  date: string;
+  date: string; // Format: DD/MM/YYYY
   tasks: string;
-  images: string[];
-  submittedBy: string; // User name
+  images: string[]; // base64 data URLs
+  submittedBy: string;
 }
