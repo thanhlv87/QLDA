@@ -55,8 +55,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             setFormData(prev => ({
                 ...prev,
                 [keys[0]]: {
-                    // @ts-ignore
-                    ...prev[keys[0]],
+                    ...(prev[keys[0] as keyof typeof prev] as Record<string, any>),
                     [keys[1]]: finalValue
                 }
             }));
@@ -72,7 +71,6 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
         const { name, options } = e.target;
         const value = Array.from(options)
             .filter((option: HTMLOptionElement) => option.selected)
-            // FIX: Explicitly type `option` to resolve TS error where it was inferred as `unknown`.
             .map((option: HTMLOptionElement) => option.value);
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -98,6 +96,32 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             <p className="text-lg text-gray-600 mb-6">{project.name}</p>
 
             <form onSubmit={handleSubmit} className="space-y-8">
+
+                 <fieldset className="p-4 border rounded-md">
+                    <legend className="px-2 font-semibold text-gray-700">Kế hoạch Tiến độ (Google Sheet)</legend>
+                    <div className="mt-2 space-y-4">
+                        <div>
+                            <Input 
+                              label="Link nhúng (để hiển thị)" 
+                              name="scheduleSheetUrl" 
+                              value={formData.scheduleSheetUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="Dán link nhúng (src) từ Google Sheets..."
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' &gt; 'Chia sẻ' &gt; 'Xuất bản lên web' &gt; 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
+                        </div>
+                         <div>
+                            <Input 
+                              label="Link Chỉnh sửa (để mở file gốc)" 
+                              name="scheduleSheetEditUrl" 
+                              value={formData.scheduleSheetEditUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="Dán link từ thanh địa chỉ trình duyệt..."
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Sao chép đường link bình thường từ thanh địa chỉ của trình duyệt (link có chữ /edit ở cuối).</p>
+                        </div>
+                    </div>
+                </fieldset>
 
                 {permissions.canEditPersonnel(currentUser) && (
                      <fieldset className="p-4 border rounded-md">

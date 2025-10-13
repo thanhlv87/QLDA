@@ -14,7 +14,7 @@ const ReviewReportModal: React.FC<{
     report: DailyReport;
     currentUser: User;
     onClose: () => void;
-    onAddReview: (projectId: string, reportId: string, comment: string, userId: string) => Promise<void>;
+    onAddReview: (projectId: string, reportId: string, comment: string, user: User) => Promise<void>;
 }> = ({ report, currentUser, onClose, onAddReview }) => {
     const [comment, setComment] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,7 +23,7 @@ const ReviewReportModal: React.FC<{
         e.preventDefault();
         if (!comment.trim()) return;
         setIsSubmitting(true);
-        await onAddReview(report.projectId, report.id, comment, currentUser.id);
+        await onAddReview(report.projectId, report.id, comment, currentUser);
         setIsSubmitting(false);
         onClose();
     };
@@ -108,11 +108,11 @@ interface ProjectDetailsProps {
     onDeleteProject: (projectId: string, projectName: string) => void;
     onUpdateReport: (reportData: DailyReport) => Promise<void>;
     onDeleteReport: (reportId: string, projectId: string) => Promise<void>;
-    onAddReportReview: (projectId: string, reportId: string, comment: string, userId: string) => Promise<void>;
+    onAddReportReview: (projectId: string, reportId: string, comment: string, user: User) => Promise<void>;
 }
 
 type DetailsView = 'details' | 'editProject' | 'addReport' | 'editReport';
-type ActiveTab = 'reports' | 'info';
+type ActiveTab = 'reports' | 'info' | 'workItems';
 
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     project,
@@ -331,7 +331,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                                 canDelete={permissions.canDeleteReport(currentUser, project)}
                                 canReview={canReviewReports}
                                 review={report.managerReview}
-                                reviewerName={report.managerReview ? getUserName(report.managerReview.reviewedById) : ''}
+                                reviewerName={report.managerReview?.reviewedByName || (report.managerReview ? getUserName(report.managerReview.reviewedById) : '')}
                             />
                         ))}
                     </div>
@@ -343,6 +343,67 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             </div>
         </div>
     );
+    
+    const renderWorkItemsTab = () => {
+        const getEmbedUrl = (urlOrHtml: string | undefined): string | null => {
+            if (!urlOrHtml) return null;
+            if (urlOrHtml.trim().startsWith('<iframe')) {
+                const match = urlOrHtml.match(/src="([^"]+)"/);
+                return match ? match[1] : null;
+            }
+            return urlOrHtml;
+        };
+
+        const embedUrl = getEmbedUrl(project.scheduleSheetUrl);
+
+        if (embedUrl) {
+            return (
+                <div className="bg-base-100 rounded-lg shadow-md border border-gray-200 animate-fade-in overflow-hidden">
+                    {project.scheduleSheetEditUrl && (
+                        <div className="p-3 bg-gray-50 border-b flex justify-end items-center">
+                            <a
+                                href={project.scheduleSheetEditUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                </svg>
+                                Mở trong Google Sheets để chỉnh sửa
+                            </a>
+                        </div>
+                    )}
+                    <div className="p-1">
+                        <div className="aspect-video">
+                            <iframe
+                                src={embedUrl}
+                                className="w-full h-full border-0"
+                                title="Kế hoạch tiến độ dự án"
+                                allowFullScreen
+                            ></iframe>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="bg-base-100 rounded-lg shadow-md p-8 border border-gray-200 animate-fade-in text-center">
+                <h3 className="text-xl font-bold text-primary mb-4">Chưa có Kế hoạch Tiến độ</h3>
+                <p className="text-gray-600 mb-6">
+                    Kế hoạch tiến độ chi tiết cho dự án này chưa được liên kết.
+                </p>
+                {canEditProject && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 text-left">
+                       <p className="font-semibold text-blue-800">Hướng dẫn:</p>
+                        <p className="text-blue-700">Vui lòng nhấn nút "Chỉnh sửa Dự án" và dán link nhúng (embed URL) từ Google Sheets vào trường "Kế hoạch Tiến độ" để hiển thị tại đây.</p>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div className="animate-fade-in space-y-6">
@@ -377,6 +438,17 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                     >
                         Báo cáo & Tiến độ
                     </button>
+                     <button
+                        onClick={() => setActiveTab('workItems')}
+                        className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                            activeTab === 'workItems'
+                            ? 'border-secondary text-secondary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                        aria-current={activeTab === 'workItems' ? 'page' : undefined}
+                    >
+                        Hạng mục Công việc
+                    </button>
                     <button
                         onClick={() => setActiveTab('info')}
                         className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
@@ -395,6 +467,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             <div>
                 {activeTab === 'reports' && renderReports()}
                 {activeTab === 'info' && renderProjectInfo()}
+                {activeTab === 'workItems' && renderWorkItemsTab()}
             </div>
             
             {/* Modals */}

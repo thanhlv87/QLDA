@@ -16,7 +16,6 @@ import {
   getDocs,
   getDoc,
   deleteField,
-  documentId,
 } from 'firebase/firestore';
 import { auth, db } from './services/firebase';
 import type { User, Project, DailyReport, ProjectReview } from './types';
@@ -97,8 +96,12 @@ const App: React.FC = () => {
         setIsLoading(true);
         const unsubs: (() => void)[] = [];
 
+        // For non-Admins, set the users array to just them. Others will be loaded if needed.
+        if (!permissions.canFetchAllUsers(currentUser)) {
+            setUsers([currentUser]);
+        }
         // Fetch all users only for Admins
-        if (permissions.canFetchAllUsers(currentUser)) {
+        else {
             const usersQuery = query(collection(db, 'users'), orderBy('name'));
             const usersUnsubscribe = onSnapshot(usersQuery, (snapshot: QuerySnapshot<DocumentData>) => {
                 setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
@@ -160,65 +163,6 @@ const App: React.FC = () => {
             unsubs.forEach(unsub => unsub());
         };
     }, [currentUser]);
-
-    // Effect to fetch relevant users for NON-ADMINS based on visible projects
-    useEffect(() => {
-        if (!currentUser || permissions.canFetchAllUsers(currentUser)) {
-            return; // Admins are handled above, or no user is logged in.
-        }
-
-        if (projects.length === 0) {
-            setUsers([currentUser]); // Default to only the current user if they have no projects
-            return;
-        }
-
-        const relevantUserIds = new Set<string>([currentUser.id]);
-        projects.forEach(project => {
-            project.projectManagerIds.forEach(id => relevantUserIds.add(id));
-            project.leadSupervisorIds.forEach(id => relevantUserIds.add(id));
-            if (project.reviews) {
-                Object.values(project.reviews).forEach(review => {
-                    relevantUserIds.add(review.reviewedById);
-                });
-            }
-        });
-        
-        // To avoid re-fetching, only fetch users not already in the state
-        const existingUserIds = new Set(users.map(u => u.id));
-        const userIdsToFetch = Array.from(relevantUserIds).filter(id => !existingUserIds.has(id));
-
-        if (userIdsToFetch.length === 0) return;
-
-        const fetchUsers = async () => {
-            try {
-                // Fetch each user document individually to avoid collection query permission errors
-                const userPromises = userIdsToFetch.map(userId => getDoc(doc(db, 'users', userId)));
-                const userDocSnapshots = await Promise.all(userPromises);
-                
-                // FIX: Split chained .filter and .map to allow TypeScript to correctly infer the narrowed type
-                // from the .exists() type guard. This resolves the "Spread types may only be created from object types" error.
-                const existingDocSnaps = userDocSnapshots.filter(docSnap => docSnap.exists());
-                const newlyFetchedUsers: User[] = existingDocSnaps
-                    .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as User));
-
-                // Merge newly fetched users with existing users in state
-                if (newlyFetchedUsers.length > 0) {
-                    setUsers(prevUsers => {
-                        const userMap = new Map<string, User>();
-                        prevUsers.forEach(u => userMap.set(u.id, u));
-                        newlyFetchedUsers.forEach(u => userMap.set(u.id, u));
-                        return Array.from(userMap.values());
-                    });
-                }
-            } catch (error) {
-                console.error("Error fetching relevant users for non-admin:", error);
-                // Don't reset users array on error, just log it. UI will show N/A for missing users.
-            }
-        };
-
-        fetchUsers();
-    }, [projects, currentUser, users]);
-
 
     // Effect for fetching reports for visible projects
     useEffect(() => {
@@ -379,12 +323,13 @@ const App: React.FC = () => {
         }
     };
     
-    const handleAddReportReview = async (projectId: string, reportId: string, comment: string, userId: string) => {
+    const handleAddReportReview = async (projectId: string, reportId: string, comment: string, user: User) => {
         try {
             const projectRef = doc(db, 'projects', projectId);
             const reviewData: ProjectReview = {
                 comment,
-                reviewedById: userId,
+                reviewedById: user.id,
+                reviewedByName: user.name, // Denormalize user name
                 reviewedAt: new Date().toISOString(),
             };
             await updateDoc(projectRef, {
