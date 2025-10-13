@@ -50,7 +50,9 @@ const initialState: Omit<Project, 'id'> = {
   constructionUnit: { companyName: '', personnelName: '', phone: '' },
   supervisionUnit: { companyName: '', personnelName: '', phone: '' },
   projectManagementUnit: { departmentName: '', personnelName: '', phone: '' },
-  supervisorA: { enterpriseName: '', personnelName: '', phone: '' }
+  supervisorA: { enterpriseName: '', personnelName: '', phone: '' },
+  scheduleSheetUrl: '',
+  scheduleSheetEditUrl: ''
 };
 
 
@@ -110,6 +112,32 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
             <form onSubmit={handleSubmit} className="space-y-8">
                  <Input label="Tên Dự án" name="name" value={formData.name} onChange={handleChange} required />
                 
+                 <fieldset className="p-4 border rounded-md">
+                    <legend className="px-2 font-semibold text-gray-700">Kế hoạch Tiến độ (Google Sheet)</legend>
+                    <div className="mt-2 space-y-4">
+                        <div>
+                            <Input 
+                              label="Link nhúng (để hiển thị)" 
+                              name="scheduleSheetUrl" 
+                              value={formData.scheduleSheetUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="Dán link nhúng (src) từ Google Sheets..."
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' &gt; 'Chia sẻ' &gt; 'Xuất bản lên web' &gt; 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
+                        </div>
+                         <div>
+                            <Input 
+                              label="Link Chỉnh sửa (để mở file gốc)" 
+                              name="scheduleSheetEditUrl" 
+                              value={formData.scheduleSheetEditUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="Dán link từ thanh địa chỉ trình duyệt..."
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Sao chép đường link bình thường từ thanh địa chỉ của trình duyệt (link có chữ /edit ở cuối).</p>
+                        </div>
+                    </div>
+                </fieldset>
+
                  <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">

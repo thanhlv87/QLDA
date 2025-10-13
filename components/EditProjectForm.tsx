@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Project, User } from '../types';
 import { Role } from '../types';
 import { permissions } from '../services/permissions';
+import { XIcon } from './Icons';
 
 interface EditProjectFormProps {
     project: Project;
@@ -55,8 +56,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             setFormData(prev => ({
                 ...prev,
                 [keys[0]]: {
-                    // @ts-ignore
-                    ...prev[keys[0]],
+                    ...(prev[keys[0] as keyof typeof prev] as Record<string, any>),
                     [keys[1]]: finalValue
                 }
             }));
@@ -72,7 +72,6 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
         const { name, options } = e.target;
         const value = Array.from(options)
             .filter((option: HTMLOptionElement) => option.selected)
-            // FIX: Explicitly type `option` to resolve TS error where it was inferred as `unknown`.
             .map((option: HTMLOptionElement) => option.value);
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -90,9 +89,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-primary">Chỉnh sửa dự án</h2>
                 <button onClick={onCancel} className="text-gray-500 hover:text-gray-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XIcon className="h-6 w-6" />
                 </button>
             </div>
             <p className="text-lg text-gray-600 mb-6">{project.name}</p>
@@ -100,8 +97,34 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             <form onSubmit={handleSubmit} className="space-y-8">
 
                  <fieldset className="p-4 border rounded-md">
-                    <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
-                    {permissions.canEditPersonnel(currentUser) ? (
+                    <legend className="px-2 font-semibold text-gray-700">Kế hoạch Tiến độ (Google Sheet)</legend>
+                    <div className="mt-2 space-y-4">
+                        <div>
+                            <Input 
+                              label="Link nhúng (để hiển thị)" 
+                              name="scheduleSheetUrl" 
+                              value={formData.scheduleSheetUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="Dán link nhúng (src) từ Google Sheets..."
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' &gt; 'Chia sẻ' &gt; 'Xuất bản lên web' &gt; 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
+                        </div>
+                         <div>
+                            <Input 
+                              label="Link Chỉnh sửa (để mở file gốc)" 
+                              name="scheduleSheetEditUrl" 
+                              value={formData.scheduleSheetEditUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="Dán link từ thanh địa chỉ trình duyệt..."
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Sao chép đường link bình thường từ thanh địa chỉ của trình duyệt (link có chữ /edit ở cuối).</p>
+                        </div>
+                    </div>
+                </fieldset>
+
+                {permissions.canEditPersonnel(currentUser) && (
+                     <fieldset className="p-4 border rounded-md">
+                        <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                             <div>
                                 <label htmlFor="projectManagerIds" className="block text-sm font-medium text-gray-700 mb-1">Cán bộ Quản lý (chọn nhiều)</label>
@@ -134,23 +157,8 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                                 </select>
                             </div>
                         </div>
-                    ) : (
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                            <div>
-                                <h4 className="block text-sm font-medium text-gray-700 mb-1">Cán bộ Quản lý</h4>
-                                <div className="p-3 border border-gray-200 rounded-md bg-gray-100 min-h-[42px] text-sm text-gray-800">
-                                    {users.filter(u => formData.projectManagerIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-500">Chưa được gán</span>}
-                                </div>
-                            </div>
-                            <div>
-                                <h4 className="block text-sm font-medium text-gray-700 mb-1">Giám sát trưởng</h4>
-                                <div className="p-3 border border-gray-200 rounded-md bg-gray-100 min-h-[42px] text-sm text-gray-800">
-                                     {users.filter(u => formData.leadSupervisorIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-500">Chưa được gán</span>}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </fieldset>
+                    </fieldset>
+                )}
                 
                 <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Thông tin Phê duyệt</legend>

@@ -35,6 +35,13 @@ export interface SupervisorAContact {
   phone: string;
 }
 
+export interface ProjectReview {
+  comment: string;
+  reviewedById: string; // User ID of the reviewer
+  reviewedByName: string; // Denormalized user name to avoid permission issues
+  reviewedAt: string; // ISO 8601 timestamp
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -50,6 +57,9 @@ export interface Project {
   supervisionUnit: ContactUnit;
   projectManagementUnit: ProjectManagementContact;
   supervisorA: SupervisorAContact;
+  reviews?: Record<string, ProjectReview>; // Map of reportId to review data
+  scheduleSheetUrl?: string; // URL for embedding Google Sheet schedule
+  scheduleSheetEditUrl?: string; // URL for editing the Google Sheet
 }
 
 export interface DailyReport {

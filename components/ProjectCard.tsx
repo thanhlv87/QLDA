@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import type { Project, User } from '../types';
 import { permissions } from '../services/permissions';
+import { CalendarIcon, TrashIcon } from './Icons';
 
 interface ProjectCardProps {
   project: Project;
@@ -8,18 +9,6 @@ interface ProjectCardProps {
   onSelectProject: (projectId: string) => void;
   onDeleteProject: (projectId: string, projectName: string) => void;
 }
-
-const CalendarIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-    </svg>
-);
-
-const TrashIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-    </svg>
-)
 
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, currentUser, onSelectProject, onDeleteProject }) => {
@@ -36,7 +25,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, currentUser, onSelec
     const endDate = parseDate(project.plannedAcceptanceDate);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate >= endDate) {
-        return { percentage: 0, statusText: 'Dữ liệu ngày không hợp lệ', statusColor: 'text-error' };
+        return { percentage: 0, statusText: 'Dữ liệu ngày không hợp lệ', statusColor: 'text-error', progressColor: 'bg-error', borderColor: 'border-error' };
     }
 
     const totalDuration = endDate.getTime() - startDate.getTime();
@@ -54,27 +43,35 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, currentUser, onSelec
 
     let statusText: string;
     let statusColor: string = 'text-gray-600';
+    let progressColor: string = 'bg-success';
+    let borderColor: string = 'border-success';
 
     if (today < startDate) {
         statusText = 'Chưa bắt đầu';
         percentage = 0;
+        progressColor = 'bg-gray-400';
+        borderColor = 'border-gray-400';
     } else if (daysRemaining < 0) {
         statusText = `Quá hạn ${Math.abs(daysRemaining)} ngày`;
         statusColor = 'text-error';
-    } else if (daysRemaining === 0) {
-        statusText = 'Hạn chót hôm nay';
+        progressColor = 'bg-error';
+        borderColor = 'border-error';
+    } else if (daysRemaining <= 7) {
+        statusText = `Còn lại ${daysRemaining} ngày`;
         statusColor = 'text-warning';
+        progressColor = 'bg-warning';
+        borderColor = 'border-warning';
     } else {
         statusText = `Còn lại ${daysRemaining} ngày`;
     }
 
-    return { percentage, statusText, statusColor };
+    return { percentage, statusText, statusColor, progressColor, borderColor };
   }, [project.constructionStartDate, project.plannedAcceptanceDate]);
 
 
   return (
     <div 
-      className="bg-base-100 rounded-lg shadow-lg hover:shadow-2xl transition-shadow duration-300 cursor-pointer overflow-hidden flex flex-col group relative"
+      className={`bg-base-100 rounded-lg shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col group relative border-l-4 ${progressInfo.borderColor}`}
       onClick={() => onSelectProject(project.id)}
     >
         {permissions.canDeleteProject(currentUser) && (
@@ -83,21 +80,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, currentUser, onSelec
                     e.stopPropagation();
                     onDeleteProject(project.id, project.name);
                 }}
-                className="absolute top-2 right-2 bg-gray-200 text-gray-600 hover:bg-error hover:text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                className="absolute top-3 right-3 bg-gray-200 text-gray-600 hover:bg-error hover:text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
                 aria-label={`Xóa dự án ${project.name}`}
             >
-                <TrashIcon />
+                <TrashIcon className="h-5 w-5" />
             </button>
         )}
       <div className="p-6 flex-grow">
         <h3 className="text-xl font-bold text-primary mb-3 truncate pr-8">{project.name}</h3>
         <div className="space-y-2 text-sm text-gray-700">
           <div className="flex items-center">
-            <CalendarIcon />
+            <CalendarIcon className="h-5 w-5 mr-2 text-gray-500" />
             <span>Ngày bắt đầu: {project.constructionStartDate}</span>
           </div>
           <div className="flex items-center">
-            <CalendarIcon />
+            <CalendarIcon className="h-5 w-5 mr-2 text-gray-500" />
             <span>Nghiệm thu dự kiến: {project.plannedAcceptanceDate}</span>
           </div>
         </div>
@@ -108,22 +105,18 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, currentUser, onSelec
             </div>
             <div className="w-full bg-neutral rounded-full h-2.5">
                 <div 
-                    className="bg-secondary h-2.5 rounded-full transition-all duration-500" 
+                    className={`${progressInfo.progressColor} h-2.5 rounded-full transition-all duration-500`} 
                     style={{ width: `${progressInfo.percentage}%` }}
                 ></div>
             </div>
         </div>
       </div>
-       <div className="bg-neutral px-6 py-3">
-        <button 
-          className="w-full text-center text-secondary font-semibold hover:text-accent transition-colors duration-200"
-          onClick={(e) => {
-              e.stopPropagation();
-              onSelectProject(project.id);
-          }}
+       <div className="bg-neutral px-6 py-3 mt-auto">
+        <div
+          className="w-full text-center text-secondary font-semibold group-hover:text-accent transition-colors duration-200"
         >
           Xem Chi Tiết →
-        </button>
+        </div>
       </div>
     </div>
   );
