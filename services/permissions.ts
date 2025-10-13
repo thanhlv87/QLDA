@@ -62,6 +62,39 @@ export const permissions = {
       (user.role === Role.LeadSupervisor && project.leadSupervisorIds.includes(user.id))
     );
   },
+  
+  /**
+   * Checks if a user can edit a daily report for a specific project.
+   */
+  canEditReport(user: User | null, project: Project): boolean {
+    if (!user) return false;
+    // Admin and assigned LeadSupervisors can edit reports.
+    return (
+        user.role === Role.Admin ||
+        (user.role === Role.LeadSupervisor && project.leadSupervisorIds.includes(user.id))
+    );
+  },
+  
+  /**
+   * Checks if a user can review/comment on a report.
+   * This is restricted to Project Managers assigned to the project.
+   */
+  canReviewReport(user: User | null, project: Project): boolean {
+    if (!user) return false;
+    // Only assigned Project Managers can review reports.
+    return user.role === Role.ProjectManager && project.projectManagerIds.includes(user.id);
+  },
+
+  /**
+   * Checks if a user can delete a daily report for a specific project.
+   */
+  canDeleteReport(user: User | null, project: Project): boolean {
+    if (!user) return false;
+    // FIX: The "Missing or insufficient permissions" error indicates that server-side rules
+    // likely only permit Admins to delete reports. This change aligns the client-side check
+    // with the inferred server-side reality to resolve the error.
+    return user.role === Role.Admin;
+  },
 
   /**
    * Checks if a user can delete a project. Only Admin can.
@@ -77,5 +110,5 @@ export const permissions = {
   canDeleteUser(user: User | null): boolean {
     if (!user) return false;
     return user.role === Role.Admin;
-  }
+  },
 };

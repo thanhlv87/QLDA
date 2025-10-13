@@ -99,9 +99,9 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
 
             <form onSubmit={handleSubmit} className="space-y-8">
 
-                 <fieldset className="p-4 border rounded-md">
-                    <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
-                    {permissions.canEditPersonnel(currentUser) ? (
+                {permissions.canEditPersonnel(currentUser) && (
+                     <fieldset className="p-4 border rounded-md">
+                        <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                             <div>
                                 <label htmlFor="projectManagerIds" className="block text-sm font-medium text-gray-700 mb-1">Cán bộ Quản lý (chọn nhiều)</label>
@@ -134,23 +134,8 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                                 </select>
                             </div>
                         </div>
-                    ) : (
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                            <div>
-                                <h4 className="block text-sm font-medium text-gray-700 mb-1">Cán bộ Quản lý</h4>
-                                <div className="p-3 border border-gray-200 rounded-md bg-gray-100 min-h-[42px] text-sm text-gray-800">
-                                    {users.filter(u => formData.projectManagerIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-500">Chưa được gán</span>}
-                                </div>
-                            </div>
-                            <div>
-                                <h4 className="block text-sm font-medium text-gray-700 mb-1">Giám sát trưởng</h4>
-                                <div className="p-3 border border-gray-200 rounded-md bg-gray-100 min-h-[42px] text-sm text-gray-800">
-                                     {users.filter(u => formData.leadSupervisorIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-500">Chưa được gán</span>}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </fieldset>
+                    </fieldset>
+                )}
                 
                 <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Thông tin Phê duyệt</legend>

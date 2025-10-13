@@ -35,6 +35,12 @@ export interface SupervisorAContact {
   phone: string;
 }
 
+export interface ProjectReview {
+  comment: string;
+  reviewedById: string; // User ID of the reviewer
+  reviewedAt: string; // ISO 8601 timestamp
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -50,6 +56,7 @@ export interface Project {
   supervisionUnit: ContactUnit;
   projectManagementUnit: ProjectManagementContact;
   supervisorA: SupervisorAContact;
+  reviews?: Record<string, ProjectReview>; // Map of reportId to review data
 }
 
 export interface DailyReport {
