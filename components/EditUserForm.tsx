@@ -34,7 +34,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onUpdateUser, onCance
             id="name"
             name="name"
             type="text"
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary"
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary bg-white text-gray-900"
             value={formData.name}
             onChange={handleChange}
             required
@@ -57,7 +57,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onUpdateUser, onCance
           <select
             id="role"
             name="role"
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary"
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary bg-white text-gray-900"
             value={formData.role}
             onChange={handleChange}
             required

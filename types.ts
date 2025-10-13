@@ -18,7 +18,20 @@ export interface Approval {
 }
 
 export interface ContactUnit {
-  name: string;
+  companyName: string;
+  personnelName: string;
+  phone: string;
+}
+
+export interface ProjectManagementContact {
+  departmentName: string;
+  personnelName: string;
+  phone: string;
+}
+
+export interface SupervisorAContact {
+  enterpriseName: string;
+  personnelName: string;
   phone: string;
 }
 
@@ -35,6 +48,8 @@ export interface Project {
   designUnit: ContactUnit;
   constructionUnit: ContactUnit;
   supervisionUnit: ContactUnit;
+  projectManagementUnit: ProjectManagementContact;
+  supervisorA: SupervisorAContact;
 }
 
 export interface DailyReport {

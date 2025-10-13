@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Project, DailyReport, User } from '../types';
 import ReportCard from './ReportCard';
 import EditProjectForm from './EditProjectForm';
@@ -55,14 +55,6 @@ const InfoField: React.FC<{ label: string; value: string }> = ({ label, value })
     </div>
 );
 
-const ContactField: React.FC<{ title: string; name: string; phone: string }> = ({ title, name, phone }) => (
-    <div className="p-4 bg-gray-50 rounded-md border">
-        <h4 className="font-semibold text-primary mb-1">{title}</h4>
-        <p className="text-sm text-gray-700">{name}</p>
-        <p className="text-sm text-gray-500">{phone}</p>
-    </div>
-);
-
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   project,
   reports,
@@ -81,9 +73,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   const [summary, setSummary] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'reports'>('info');
-
-  const projectManagers = users.filter(user => project.projectManagerIds.includes(user.id));
-  const leadSupervisors = users.filter(user => project.leadSupervisorIds.includes(user.id));
 
   const handleGenerateSummary = () => {
     if (reports.length > 0) {
@@ -171,7 +160,8 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
       if (!e.target.files) return;
       setIsProcessingImages(true);
       const files = Array.from(e.target.files);
-      const optimizedImagePromises = files.map(file => optimizeImage(file));
+      // FIX: Explicitly type `file` as `File` to resolve TS error where it was inferred as `unknown`.
+      const optimizedImagePromises = files.map((file: File) => optimizeImage(file));
 
       try {
           const optimizedImages = await Promise.all(optimizedImagePromises);
@@ -191,7 +181,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
 
 
   if (isEditing) {
-    return <EditProjectForm project={project} onUpdateProject={handleUpdateProject} onCancel={() => setIsEditing(false)} users={users} />;
+    return <EditProjectForm project={project} onUpdateProject={handleUpdateProject} onCancel={() => setIsEditing(false)} users={users} currentUser={currentUser} />;
   }
 
   const TabButton: React.FC<{
@@ -344,39 +334,39 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                     <InfoField label="Số QĐ" value={project.budgetApproval.decisionNumber} />
                     <InfoField label="Ngày" value={project.budgetApproval.date} />
                 </div>
-                 <div className="mt-4 pt-4 border-t">
-                    <h4 className="font-semibold text-gray-600 mb-2">Nhân sự Phụ trách</h4>
-                    <div>
-                      <p className="font-medium text-sm text-gray-800">Cán bộ Quản lý:</p>
-                      {projectManagers.length > 0 ? (
-                        <ul className="list-disc list-inside ml-4 text-gray-700">
-                          {projectManagers.map(pm => <li key={pm.id}>{pm.name}</li>)}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic ml-4">Chưa được gán</p>
-                      )}
-                    </div>
-                </div>
               </div>
               <div className="bg-base-100 p-6 rounded-lg shadow-md border border-gray-200">
-                 <h3 className="text-xl font-bold text-primary mb-4 border-b pb-2">Các đơn vị liên quan</h3>
+                 <h3 className="text-xl font-bold text-primary mb-4 border-b pb-2">Các đơn vị & Cán bộ liên quan</h3>
                  <div className="space-y-4">
-                    <ContactField title="Đơn vị Thiết kế" name={project.designUnit.name} phone={project.designUnit.phone} />
-                    <ContactField title="Đơn vị Thi công" name={project.constructionUnit.name} phone={project.constructionUnit.phone} />
+                    <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <h4 className="font-semibold text-primary mb-2">Cán bộ Quản lý Dự án</h4>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Phòng:</span> {project.projectManagementUnit?.departmentName || 'N/A'}</p>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Tên:</span> {project.projectManagementUnit?.personnelName || 'N/A'}</p>
+                        <p className="text-sm text-gray-500"><span className="font-medium">SĐT:</span> {project.projectManagementUnit?.phone || 'N/A'}</p>
+                    </div>
+                     <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <h4 className="font-semibold text-primary mb-2">Giám sát A của đơn vị QLVH</h4>
+                        <p className="text-sm text-gray-700"><span className="font-medium">XNDV:</span> {project.supervisorA?.enterpriseName || 'N/A'}</p>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Tên:</span> {project.supervisorA?.personnelName || 'N/A'}</p>
+                        <p className="text-sm text-gray-500"><span className="font-medium">SĐT:</span> {project.supervisorA?.phone || 'N/A'}</p>
+                    </div>
                     <div className="p-4 bg-gray-50 rounded-md border">
-                      <h4 className="font-semibold text-primary mb-1">Đơn vị Giám sát</h4>
-                      <p className="text-sm text-gray-700">{project.supervisionUnit.name}</p>
-                      <p className="text-sm text-gray-500">{project.supervisionUnit.phone}</p>
-                      <div className="mt-2 pt-2 border-t">
-                        <p className="font-medium text-sm text-gray-800">Giám sát trưởng:</p>
-                        {leadSupervisors.length > 0 ? (
-                          <ul className="list-disc list-inside ml-4 text-sm text-gray-700">
-                            {leadSupervisors.map(ls => <li key={ls.id}>{ls.name}</li>)}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic ml-4">Chưa được gán</p>
-                        )}
-                      </div>
+                        <h4 className="font-semibold text-primary mb-2">Đơn vị Thiết kế</h4>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Công ty:</span> {project.designUnit.companyName || 'N/A'}</p>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Chủ nhiệm đề án:</span> {project.designUnit.personnelName || 'N/A'}</p>
+                        <p className="text-sm text-gray-500"><span className="font-medium">SĐT:</span> {project.designUnit.phone || 'N/A'}</p>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-md border">
+                        <h4 className="font-semibold text-primary mb-2">Đơn vị Thi công</h4>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Công ty:</span> {project.constructionUnit.companyName || 'N/A'}</p>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Chỉ huy trưởng:</span> {project.constructionUnit.personnelName || 'N/A'}</p>
+                        <p className="text-sm text-gray-500"><span className="font-medium">SĐT:</span> {project.constructionUnit.phone || 'N/A'}</p>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-md border">
+                      <h4 className="font-semibold text-primary mb-2">Đơn vị Giám sát</h4>
+                       <p className="text-sm text-gray-700"><span className="font-medium">Công ty:</span> {project.supervisionUnit.companyName || 'N/A'}</p>
+                       <p className="text-sm text-gray-700"><span className="font-medium">Giám sát trưởng (đơn vị):</span> {project.supervisionUnit.personnelName || 'N/A'}</p>
+                       <p className="text-sm text-gray-500"><span className="font-medium">SĐT:</span> {project.supervisionUnit.phone || 'N/A'}</p>
                     </div>
                  </div>
               </div>
@@ -397,7 +387,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                         rows={4}
                         value={newReportTasks}
                         onChange={(e) => setNewReportTasks(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary bg-white text-gray-900"
                         placeholder="Mô tả chi tiết các công việc đã làm trong ngày..."
                         required
                       />

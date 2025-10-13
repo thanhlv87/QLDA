@@ -116,12 +116,20 @@ const App: React.FC = () => {
             setReports(allReports);
         }, (error) => console.error("Error fetching reports:", error));
 
-        // Fetch all users for name lookups and management
-        const usersQuery = query(collection(db, 'users'), orderBy('name'));
-        const usersUnsubscribe = onSnapshot(usersQuery, (snapshot) => {
-            const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setUsers(allUsers);
-        }, (error) => console.error("Error fetching users:", error));
+        // Fetch all users for name lookups and management, respecting permissions
+        let usersUnsubscribe = () => {};
+        if (permissions.canFetchAllUsers(currentUser)) {
+            const usersQuery = query(collection(db, 'users'), orderBy('name'));
+            usersUnsubscribe = onSnapshot(usersQuery, (snapshot) => {
+                const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                setUsers(allUsers);
+            }, (error) => {
+                console.error("Error fetching users:", error);
+                setUsers([]);
+            });
+        } else {
+            setUsers([]);
+        }
 
         return () => {
             projectsUnsubscribe();

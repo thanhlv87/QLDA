@@ -14,7 +14,8 @@ const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: str
         <input
             id={props.name}
             type={type}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary"
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary bg-white text-gray-900"
+            style={type === 'date' ? { colorScheme: 'light' } : {}}
             {...props}
         />
     </div>
@@ -45,9 +46,11 @@ const initialState: Omit<Project, 'id'> = {
   capitalPlanApproval: { decisionNumber: '', date: '' },
   technicalPlanApproval: { decisionNumber: '', date: '' },
   budgetApproval: { decisionNumber: '', date: '' },
-  designUnit: { name: '', phone: '' },
-  constructionUnit: { name: '', phone: '' },
-  supervisionUnit: { name: '', phone: '' }
+  designUnit: { companyName: '', personnelName: '', phone: '' },
+  constructionUnit: { companyName: '', personnelName: '', phone: '' },
+  supervisionUnit: { companyName: '', personnelName: '', phone: '' },
+  projectManagementUnit: { departmentName: '', personnelName: '', phone: '' },
+  supervisorA: { enterpriseName: '', personnelName: '', phone: '' }
 };
 
 
@@ -81,8 +84,9 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
     const handleMultiSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const { name, options } = e.target;
         const value = Array.from(options)
-            .filter(option => option.selected)
-            .map(option => option.value);
+            .filter((option: HTMLOptionElement) => option.selected)
+            // FIX: Explicitly type `option` to resolve TS error where it was inferred as `unknown`.
+            .map((option: HTMLOptionElement) => option.value);
         setFormData(prev => ({ ...prev, [name]: value }));
     };
     
@@ -107,7 +111,7 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
                  <Input label="Tên Dự án" name="name" value={formData.name} onChange={handleChange} required />
                 
                  <fieldset className="p-4 border rounded-md">
-                    <legend className="px-2 font-semibold text-gray-700">Nhân sự Phụ trách</legend>
+                    <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                         <div>
                             <label htmlFor="projectManagerIds" className="block text-sm font-medium text-gray-700 mb-1">Cán bộ Quản lý (chọn nhiều)</label>
@@ -115,7 +119,7 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
                                 id="projectManagerIds"
                                 name="projectManagerIds"
                                 multiple
-                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary h-32"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary h-32 bg-white text-gray-900"
                                 value={formData.projectManagerIds}
                                 onChange={handleMultiSelectChange}
                             >
@@ -130,7 +134,7 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
                                 id="leadSupervisorIds"
                                 name="leadSupervisorIds"
                                 multiple
-                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary h-32"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary h-32 bg-white text-gray-900"
                                 value={formData.leadSupervisorIds}
                                 onChange={handleMultiSelectChange}
                             >
@@ -172,21 +176,38 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
                 </fieldset>
 
                  <fieldset className="p-4 border rounded-md">
-                    <legend className="px-2 font-semibold text-gray-700">Thông tin các Đơn vị</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+                    <legend className="px-2 font-semibold text-gray-700">Thông tin các Đơn vị & Cán bộ</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                         <div className="space-y-3 p-4 bg-blue-50 rounded-md border border-blue-200">
+                            <h4 className="font-medium text-gray-800">Cán bộ Quản lý Dự án</h4>
+                            <Input label="Tên phòng" name="projectManagementUnit.departmentName" value={formData.projectManagementUnit.departmentName} onChange={handleChange} />
+                            <Input label="Tên Cán bộ" name="projectManagementUnit.personnelName" value={formData.projectManagementUnit.personnelName} onChange={handleChange} />
+                            <Input label="SĐT" name="projectManagementUnit.phone" value={formData.projectManagementUnit.phone} onChange={handleChange} />
+                        </div>
+                        <div className="space-y-3 p-4 bg-blue-50 rounded-md border border-blue-200">
+                            <h4 className="font-medium text-gray-800">Giám sát A của đơn vị QLVH</h4>
+                             <Input label="Tên XNDV" name="supervisorA.enterpriseName" value={formData.supervisorA.enterpriseName} onChange={handleChange} />
+                            <Input label="Tên Cán bộ" name="supervisorA.personnelName" value={formData.supervisorA.personnelName} onChange={handleChange} />
+                            <Input label="SĐT" name="supervisorA.phone" value={formData.supervisorA.phone} onChange={handleChange} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
                         <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
                             <h4 className="font-medium text-gray-800">Đơn vị Thiết kế</h4>
-                            <Input label="Chủ nhiệm" name="designUnit.name" value={formData.designUnit.name} onChange={handleChange} />
+                            <Input label="Tên công ty" name="designUnit.companyName" value={formData.designUnit.companyName} onChange={handleChange} />
+                            <Input label="Chủ nhiệm đề án" name="designUnit.personnelName" value={formData.designUnit.personnelName} onChange={handleChange} />
                             <Input label="SĐT" name="designUnit.phone" value={formData.designUnit.phone} onChange={handleChange} />
                         </div>
                         <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
                             <h4 className="font-medium text-gray-800">Đơn vị Thi công</h4>
-                            <Input label="Chỉ huy trưởng" name="constructionUnit.name" value={formData.constructionUnit.name} onChange={handleChange} />
+                            <Input label="Tên công ty" name="constructionUnit.companyName" value={formData.constructionUnit.companyName} onChange={handleChange} />
+                            <Input label="Chỉ huy trưởng" name="constructionUnit.personnelName" value={formData.constructionUnit.personnelName} onChange={handleChange} />
                             <Input label="SĐT" name="constructionUnit.phone" value={formData.constructionUnit.phone} onChange={handleChange} />
                         </div>
                         <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
                             <h4 className="font-medium text-gray-800">Đơn vị Giám sát</h4>
-                            <Input label="Tên đơn vị" name="supervisionUnit.name" value={formData.supervisionUnit.name} onChange={handleChange} />
+                            <Input label="Tên công ty" name="supervisionUnit.companyName" value={formData.supervisionUnit.companyName} onChange={handleChange} />
+                            <Input label="Giám sát trưởng" name="supervisionUnit.personnelName" value={formData.supervisionUnit.personnelName} onChange={handleChange} />
                             <Input label="SĐT" name="supervisionUnit.phone" value={formData.supervisionUnit.phone} onChange={handleChange} />
                         </div>
                     </div>
