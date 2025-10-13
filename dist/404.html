@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>QLDA-NPSC</title>
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
+      // https://github.com/rafgraph/spa-github-pages
+      var l = window.location;
+      var l2 = l.href.replace(l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : ''), '');
+      var segmentCount = 1;
+
+      // Tách URL thành các segment
+      var redirect = l2.split('/').slice(0, segmentCount + 1).join('/');
+
+      // Redirect về trang chủ với path còn lại
+      window.location = redirect + '/#' + l2.split('/').slice(segmentCount + 1).join('/').replace(/&/g, '~and~');
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
