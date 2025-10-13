@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Project, User } from '../types';
 import { Role } from '../types';
 import { permissions } from '../services/permissions';
+import { XIcon } from './Icons';
 
 interface EditProjectFormProps {
     project: Project;
@@ -88,9 +89,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-primary">Chỉnh sửa dự án</h2>
                 <button onClick={onCancel} className="text-gray-500 hover:text-gray-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XIcon className="h-6 w-6" />
                 </button>
             </div>
             <p className="text-lg text-gray-600 mb-6">{project.name}</p>

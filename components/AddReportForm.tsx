@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { DailyReport, User } from '../types';
+import { XIcon } from './Icons';
 
 interface AddReportFormProps {
   projectId: string;
@@ -174,9 +175,7 @@ const AddReportForm: React.FC<AddReportFormProps> = ({ projectId, currentUser, o
                               className="absolute top-0 right-0 -mt-2 -mr-2 bg-error text-white rounded-full p-0 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
                               aria-label="Remove image"
                           >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                          </svg>
+                            <XIcon className="h-4 w-4" />
                           </button>
                       </div>
                   ))}

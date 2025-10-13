@@ -29,8 +29,13 @@ import ProjectDetails from './components/ProjectDetails';
 import AddProjectForm from './components/AddProjectForm';
 import UserManagement from './components/UserManagement';
 import ConfirmationModal from './components/ConfirmationModal';
+import Toast from './components/Toast';
+import ProjectCardSkeleton from './components/ProjectCardSkeleton';
+import Footer from './components/Footer';
+
 
 type AppView = 'dashboard' | 'projectDetails' | 'addProject' | 'userManagement';
+type ToastMessage = { id: number; message: string; type: 'success' | 'error' };
 
 const App: React.FC = () => {
     // Authentication state
@@ -46,8 +51,18 @@ const App: React.FC = () => {
     // UI/Navigation state
     const [view, setView] = useState<AppView>('dashboard');
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isProjectsLoading, setIsProjectsLoading] = useState(true);
+    const [isReportsLoading, setIsReportsLoading] = useState(true);
     const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    
+    const addToast = (message: string, type: 'success' | 'error') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(toast => toast.id !== id));
+        }, 4000);
+    };
 
     // Effect for handling auth state changes
     useEffect(() => {
@@ -55,7 +70,7 @@ const App: React.FC = () => {
             setFirebaseUser(user);
             if (!user) {
                 setCurrentUser(null);
-                setIsLoading(false);
+                setIsProjectsLoading(false);
             }
         });
         return () => unsubscribe();
@@ -89,11 +104,11 @@ const App: React.FC = () => {
         if (!currentUser) {
             setProjects([]);
             setUsers([]);
-            setIsLoading(false);
+            setIsProjectsLoading(false);
             return () => {};
         }
 
-        setIsLoading(true);
+        setIsProjectsLoading(true);
         const unsubs: (() => void)[] = [];
 
         // For non-Admins, set the users array to just them. Others will be loaded if needed.
@@ -117,10 +132,10 @@ const App: React.FC = () => {
             const projectsQuery = query(collection(db, 'projects'), orderBy('name'));
             const projectsUnsubscribe = onSnapshot(projectsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
                 setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
-                setIsLoading(false);
+                setIsProjectsLoading(false);
             }, (error) => {
                 console.error("Error fetching projects:", error);
-                setIsLoading(false);
+                setIsProjectsLoading(false);
             });
             unsubs.push(projectsUnsubscribe);
         } else { // PMs and Supervisors get assigned projects
@@ -136,7 +151,7 @@ const App: React.FC = () => {
                 lsProjects.forEach(p => projectMap.set(p.id, p));
                 const sortedProjects = Array.from(projectMap.values()).sort((a, b) => a.name.localeCompare(b.name));
                 setProjects(sortedProjects);
-                setIsLoading(false);
+                setIsProjectsLoading(false);
             };
 
             const unsubPM = onSnapshot(pmQuery, (snapshot: QuerySnapshot<DocumentData>) => {
@@ -144,7 +159,7 @@ const App: React.FC = () => {
                 mergeAndSetProjects();
             }, (error) => {
                 console.error("Error fetching manager projects:", error);
-                setIsLoading(false);
+                setIsProjectsLoading(false);
             });
 
             const unsubLS = onSnapshot(lsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
@@ -152,7 +167,7 @@ const App: React.FC = () => {
                 mergeAndSetProjects();
             }, (error) => {
                 console.error("Error fetching supervisor projects:", error);
-                setIsLoading(false);
+                setIsProjectsLoading(false);
             });
             
             unsubs.push(unsubPM);
@@ -168,9 +183,11 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser || projects.length === 0) {
             setReports([]);
+            setIsReportsLoading(false);
             return () => {};
         }
-
+        
+        setIsReportsLoading(true);
         const projectIds = projects.map(p => p.id);
         
         if (projectIds.length > 30) {
@@ -179,6 +196,7 @@ const App: React.FC = () => {
         const queryableIds = projectIds.slice(0, 30);
         if(queryableIds.length === 0) {
           setReports([]);
+          setIsReportsLoading(false);
           return;
         }
 
@@ -186,9 +204,11 @@ const App: React.FC = () => {
         const reportsUnsubscribe = onSnapshot(reportsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
             const allReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyReport));
             setReports(allReports);
+            setIsReportsLoading(false);
         }, (error) => {
             console.error("Error fetching reports:", error);
             setReports([]);
+            setIsReportsLoading(false);
         });
         
         return () => reportsUnsubscribe();
@@ -240,9 +260,10 @@ const App: React.FC = () => {
         try {
             await addDoc(collection(db, 'projects'), projectData);
             setView('dashboard');
+            addToast('Dự án đã được tạo thành công!', 'success');
         } catch (error) {
             console.error("Error adding project:", error);
-            alert("Failed to add project. See console for details.");
+            addToast('Lỗi khi tạo dự án.', 'error');
         }
     };
 
@@ -251,9 +272,10 @@ const App: React.FC = () => {
             const projectRef = doc(db, 'projects', projectData.id);
             const { id, ...dataToUpdate } = projectData;
             await updateDoc(projectRef, dataToUpdate);
+            addToast('Dự án đã được cập nhật!', 'success');
         } catch (error) {
             console.error("Error updating project:", error);
-            alert("Failed to update project. See console for details.");
+            addToast('Lỗi khi cập nhật dự án.', 'error');
         }
     };
 
@@ -276,6 +298,7 @@ const App: React.FC = () => {
             
             await deleteDoc(doc(db, 'projects', projectId));
 
+            addToast(`Dự án "${projectToDelete.name}" đã được xóa.`, 'success');
             setProjectToDelete(null);
             if (selectedProjectId === projectId) {
                 setView('dashboard');
@@ -283,7 +306,7 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error("Error performing cascading delete for project:", error);
-            alert("Failed to delete project and its data. See console for details.");
+            addToast('Lỗi khi xóa dự án.', 'error');
             setProjectToDelete(null);
         }
     };
@@ -292,9 +315,10 @@ const App: React.FC = () => {
     const handleAddReport = async (reportData: Omit<DailyReport, 'id'>) => {
         try {
             await addDoc(collection(db, 'reports'), reportData);
+            addToast('Báo cáo đã được gửi thành công!', 'success');
         } catch (error) {
             console.error("Error adding report:", error);
-            alert("Failed to add report. See console for details.");
+            addToast('Lỗi khi gửi báo cáo.', 'error');
         }
     };
 
@@ -303,9 +327,10 @@ const App: React.FC = () => {
             const reportRef = doc(db, 'reports', reportData.id);
             const { id, ...dataToUpdate } = reportData;
             await updateDoc(reportRef, dataToUpdate);
+            addToast('Báo cáo đã được cập nhật!', 'success');
         } catch (error) {
             console.error("Error updating report:", error);
-            alert("Failed to update report. See console for details.");
+            addToast('Lỗi khi cập nhật báo cáo.', 'error');
         }
     };
 
@@ -317,9 +342,10 @@ const App: React.FC = () => {
                 [`reviews.${reportId}`]: deleteField()
             });
             await deleteDoc(doc(db, 'reports', reportId));
+            addToast('Báo cáo đã được xóa.', 'success');
         } catch (error) {
             console.error("Error deleting report and its review:", error);
-            alert("Failed to delete report. See console for details.");
+            addToast('Lỗi khi xóa báo cáo.', 'error');
         }
     };
     
@@ -335,9 +361,10 @@ const App: React.FC = () => {
             await updateDoc(projectRef, {
                 [`reviews.${reportId}`]: reviewData
             });
+            addToast('Nhận xét đã được lưu.', 'success');
         } catch (error) {
             console.error("Error adding report review:", error);
-            alert("Không thể lưu nhận xét. Vui lòng thử lại.");
+            addToast('Không thể lưu nhận xét.', 'error');
         }
     };
 
@@ -347,22 +374,24 @@ const App: React.FC = () => {
             const userRef = doc(db, 'users', userData.id);
             const { id, ...dataToUpdate } = userData;
             await updateDoc(userRef, dataToUpdate);
+            addToast('Thông tin người dùng đã được cập nhật.', 'success');
         } catch (error) {
             console.error("Error updating user:", error);
-            alert("Failed to update user. See console for details.");
+            addToast('Lỗi khi cập nhật người dùng.', 'error');
         }
     };
 
     const handleDeleteUser = async (userId: string) => {
         if (currentUser && userId === currentUser.id) {
-            alert("You cannot delete yourself.");
+            addToast("Bạn không thể tự xóa chính mình.", 'error');
             return;
         }
         try {
             await deleteDoc(doc(db, 'users', userId));
+            addToast('Người dùng đã được xóa.', 'success');
         } catch (error) {
             console.error("Error deleting user:", error);
-            alert("Failed to delete user. See console for details.");
+            addToast('Lỗi khi xóa người dùng.', 'error');
         }
     };
 
@@ -378,7 +407,7 @@ const App: React.FC = () => {
     };
 
     // Render logic
-    if (isLoading && !currentUser) {
+    if (isProjectsLoading && !currentUser) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-base-200">
                 <p className="text-xl">Đang tải ứng dụng...</p>
@@ -398,6 +427,7 @@ const App: React.FC = () => {
                         <ProjectDetails
                             project={selectedProject}
                             reports={reportsForSelectedProject}
+                            isReportsLoading={isReportsLoading}
                             currentUser={currentUser}
                             users={users}
                             onBack={handleBackToDashboard}
@@ -419,7 +449,7 @@ const App: React.FC = () => {
             case 'dashboard':
             default:
                 return (
-                    <div>
+                    <div className="animate-fade-in">
                         <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                             <h2 className="text-3xl font-bold text-gray-800">Danh sách Dự án</h2>
                             <div className="flex gap-2 sm:gap-4">
@@ -435,7 +465,11 @@ const App: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                        {isLoading ? <p>Đang tải dự án...</p> : (
+                        {isProjectsLoading ? (
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {[...Array(6)].map((_, i) => <ProjectCardSkeleton key={i} />)}
+                            </div>
+                        ) : (
                             projects.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {projects.map(project => (
@@ -458,11 +492,12 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-neutral">
+        <div className="min-h-screen bg-neutral flex flex-col">
             <Header user={currentUser} onLogout={handleLogout} />
-            <main className="p-4 sm:p-6 lg:p-8">
+            <main className="p-4 sm:p-6 lg:p-8 flex-grow">
                 {renderContent()}
             </main>
+            <Footer />
             {projectToDelete && (
                 <ConfirmationModal 
                     message={`Bạn có chắc chắn muốn xóa dự án "${projectToDelete.name}"?\nTất cả báo cáo và nhận xét liên quan cũng sẽ bị xóa vĩnh viễn.`}
@@ -470,6 +505,16 @@ const App: React.FC = () => {
                     onCancel={() => setProjectToDelete(null)}
                 />
             )}
+            <div className="fixed bottom-4 right-4 z-50 space-y-2">
+                {toasts.map(toast => (
+                    <Toast 
+                        key={toast.id}
+                        message={toast.message}
+                        type={toast.type}
+                        onClose={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                    />
+                ))}
+            </div>
         </div>
     );
 };

@@ -8,6 +8,11 @@ import EditReportForm from './EditReportForm';
 import EditProjectForm from './EditProjectForm';
 import ReportCard from './ReportCard';
 import ConfirmationModal from './ConfirmationModal';
+import ImageLightbox from './ImageLightbox'; // New component for image gallery
+import ReportCardSkeleton from './ReportCardSkeleton'; // New component for loading state
+import ReportDetailsModal from './ReportDetailsModal'; // New component for report details
+import { ArrowLeftIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CompanyIcon, ExternalLinkIcon, PhoneIcon, UserCircleIcon, UserGroupIcon, XIcon } from './Icons';
+
 
 // Modal for Project Manager to add a review
 const ReviewReportModal: React.FC<{
@@ -72,9 +77,12 @@ const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({
   </div>
 );
 
-const DetailItem: React.FC<{ label: string; value?: string | React.ReactNode }> = ({ label, value }) => (
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm">
-    <dt className="font-medium text-gray-500">{label}</dt>
+const DetailItem: React.FC<{ label: string; value?: string | React.ReactNode; icon?: React.ReactNode }> = ({ label, value, icon }) => (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm items-start">
+    <dt className="font-medium text-gray-500 flex items-center">
+        {icon && <span className="mr-2 text-gray-400">{icon}</span>}
+        {label}
+    </dt>
     <dd className="text-gray-900 md:col-span-2">{value || <span className="italic text-gray-400">Chưa có thông tin</span>}</dd>
   </div>
 );
@@ -87,11 +95,11 @@ const ApprovalCard: React.FC<{ title: string; approval: Project['capitalPlanAppr
     </div>
 );
 
-const ContactCard: React.FC<{ title: string; details: { label: string; value: string }[] }> = ({ title, details }) => (
+const ContactCard: React.FC<{ title: string; details: { label: string; value: string; icon?: React.ReactNode }[] }> = ({ title, details }) => (
     <div className="p-4 bg-gray-50 rounded-md border h-full">
         <h5 className="font-semibold text-gray-800 mb-3 text-base">{title}</h5>
         <div className="space-y-2">
-            {details.map(item => <DetailItem key={item.label} label={item.label} value={item.value} />)}
+            {details.map(item => <DetailItem key={item.label} label={item.label} value={item.value} icon={item.icon} />)}
         </div>
     </div>
 );
@@ -99,7 +107,8 @@ const ContactCard: React.FC<{ title: string; details: { label: string; value: st
 
 interface ProjectDetailsProps {
     project: Project;
-    reports: (DailyReport & { managerReview?: ProjectReview })[]; // Reports with review attached
+    reports: (DailyReport & { managerReview?: ProjectReview })[];
+    isReportsLoading: boolean;
     currentUser: User | null;
     users: User[];
     onBack: () => void;
@@ -117,6 +126,7 @@ type ActiveTab = 'reports' | 'info' | 'workItems';
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     project,
     reports,
+    isReportsLoading,
     currentUser,
     users,
     onBack,
@@ -134,15 +144,38 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     const [reportToReview, setReportToReview] = useState<DailyReport | null>(null);
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
     const [aiSummary, setAiSummary] = useState<string>('');
+    const [displayedAiSummary, setDisplayedAiSummary] = useState<string>('');
+    const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
+    const [viewingReport, setViewingReport] = useState<(DailyReport & { managerReview?: ProjectReview }) | null>(null);
+
+
+    // AI typing effect
+    useEffect(() => {
+        if (aiSummary) {
+            setDisplayedAiSummary('');
+            let i = 0;
+            const interval = setInterval(() => {
+                setDisplayedAiSummary(prev => prev + aiSummary.charAt(i));
+                i++;
+                if (i > aiSummary.length) {
+                    clearInterval(interval);
+                }
+            }, 10); // Adjust typing speed here
+            return () => clearInterval(interval);
+        }
+    }, [aiSummary]);
     
     useEffect(() => {
         setAiSummary('');
+        setDisplayedAiSummary('');
         setActiveTab('reports');
     }, [project.id]);
 
     const handleGenerateSummary = async () => {
         setIsGeneratingSummary(true);
         setAiSummary('');
+        setDisplayedAiSummary('');
         try {
             const summary = await generateProjectSummary(project, reports);
             setAiSummary(summary);
@@ -180,11 +213,15 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
         await onUpdateProject(projectData);
         setView('details');
     };
+
+    const handleImageClick = (images: string[], startIndex: number) => {
+        setLightboxImages(images);
+        setLightboxIndex(startIndex);
+    };
     
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
     const canAddReport = useMemo(() => permissions.canAddReport(currentUser, project), [currentUser, project]);
     const canEditProject = useMemo(() => permissions.canEditProject(currentUser, project), [currentUser, project]);
-    const canReviewReports = useMemo(() => permissions.canReviewReport(currentUser, project), [currentUser, project]);
 
     const projectManagers = useMemo(() => 
         users.filter(u => project.projectManagerIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-400">Chưa gán</span>,
@@ -239,14 +276,14 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
          <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200 animate-fade-in">
             {currentUser?.role === Role.Admin && (
                 <DetailSection title="Nhân sự Phụ trách (Phân quyền)">
-                    <DetailItem label="Cán bộ Quản lý" value={projectManagers} />
-                    <DetailItem label="Giám sát trưởng" value={leadSupervisors} />
+                    <DetailItem label="Cán bộ Quản lý" value={projectManagers} icon={<UserGroupIcon />} />
+                    <DetailItem label="Giám sát trưởng" value={leadSupervisors} icon={<UserGroupIcon />} />
                 </DetailSection>
             )}
 
              <DetailSection title="Mốc thời gian">
-                <DetailItem label="Ngày triển khai thi công" value={project.constructionStartDate} />
-                <DetailItem label="Ngày nghiệm thu theo kế hoạch" value={project.plannedAcceptanceDate} />
+                <DetailItem label="Ngày triển khai thi công" value={project.constructionStartDate} icon={<CalendarIcon />} />
+                <DetailItem label="Ngày nghiệm thu theo kế hoạch" value={project.plannedAcceptanceDate} icon={<CalendarIcon />} />
             </DetailSection>
 
             <DetailSection title="Thông tin Phê duyệt">
@@ -260,29 +297,29 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             <DetailSection title="Thông tin các Đơn vị & Cán bộ">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
                     <ContactCard title="Cán bộ Quản lý Dự án" details={[
-                        { label: 'Tên phòng', value: project.projectManagementUnit?.departmentName || '' },
-                        { label: 'Tên Cán bộ', value: project.projectManagementUnit?.personnelName || '' },
-                        { label: 'SĐT', value: project.projectManagementUnit?.phone || '' },
+                        { label: 'Tên phòng', value: project.projectManagementUnit?.departmentName || '', icon: <CompanyIcon /> },
+                        { label: 'Tên Cán bộ', value: project.projectManagementUnit?.personnelName || '', icon: <UserCircleIcon /> },
+                        { label: 'SĐT', value: project.projectManagementUnit?.phone || '', icon: <PhoneIcon /> },
                     ]} />
                     <ContactCard title="Giám sát A (QLVH)" details={[
-                        { label: 'Tên XNDV', value: project.supervisorA?.enterpriseName || '' },
-                        { label: 'Tên Cán bộ', value: project.supervisorA?.personnelName || '' },
-                        { label: 'SĐT', value: project.supervisorA?.phone || '' },
+                        { label: 'Tên XNDV', value: project.supervisorA?.enterpriseName || '', icon: <CompanyIcon /> },
+                        { label: 'Tên Cán bộ', value: project.supervisorA?.personnelName || '', icon: <UserCircleIcon /> },
+                        { label: 'SĐT', value: project.supervisorA?.phone || '', icon: <PhoneIcon /> },
                     ]} />
                      <ContactCard title="Đơn vị Thiết kế" details={[
-                        { label: 'Tên công ty', value: project.designUnit.companyName },
-                        { label: 'Chủ nhiệm đề án', value: project.designUnit.personnelName },
-                        { label: 'SĐT', value: project.designUnit.phone },
+                        { label: 'Tên công ty', value: project.designUnit.companyName, icon: <CompanyIcon /> },
+                        { label: 'Chủ nhiệm đề án', value: project.designUnit.personnelName, icon: <UserCircleIcon /> },
+                        { label: 'SĐT', value: project.designUnit.phone, icon: <PhoneIcon /> },
                     ]} />
                     <ContactCard title="Đơn vị Thi công" details={[
-                        { label: 'Tên công ty', value: project.constructionUnit.companyName },
-                        { label: 'Chỉ huy trưởng', value: project.constructionUnit.personnelName },
-                        { label: 'SĐT', value: project.constructionUnit.phone },
+                        { label: 'Tên công ty', value: project.constructionUnit.companyName, icon: <CompanyIcon /> },
+                        { label: 'Chỉ huy trưởng', value: project.constructionUnit.personnelName, icon: <UserCircleIcon /> },
+                        { label: 'SĐT', value: project.constructionUnit.phone, icon: <PhoneIcon /> },
                     ]} />
                     <ContactCard title="Đơn vị Giám sát" details={[
-                        { label: 'Tên công ty', value: project.supervisionUnit.companyName },
-                        { label: 'Giám sát trưởng', value: project.supervisionUnit.personnelName },
-                        { label: 'SĐT', value: project.supervisionUnit.phone },
+                        { label: 'Tên công ty', value: project.supervisionUnit.companyName, icon: <CompanyIcon /> },
+                        { label: 'Giám sát trưởng', value: project.supervisionUnit.personnelName, icon: <UserCircleIcon /> },
+                        { label: 'SĐT', value: project.supervisionUnit.phone, icon: <PhoneIcon /> },
                     ]} />
                 </div>
             </DetailSection>
@@ -302,9 +339,9 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                         {isGeneratingSummary ? 'Đang tạo...' : 'Tạo tóm tắt'}
                     </button>
                 </div>
-                {isGeneratingSummary && <p className="text-gray-600">AI đang phân tích báo cáo, vui lòng chờ...</p>}
-                {aiSummary && (
-                    <div className="prose max-w-none text-gray-700 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: aiSummary.replace(/\n/g, '<br />') }}></div>
+                {isGeneratingSummary && !displayedAiSummary && <p className="text-gray-600">AI đang phân tích báo cáo, vui lòng chờ...</p>}
+                {displayedAiSummary && (
+                    <div className="prose max-w-none text-gray-700 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: displayedAiSummary.replace(/\n/g, '<br />') }}></div>
                 )}
             </div>
             
@@ -318,18 +355,17 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                     )}
                 </div>
 
-                {reports.length > 0 ? (
+                {isReportsLoading ? (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {[...Array(4)].map((_, i) => <ReportCardSkeleton key={i} />)}
+                    </div>
+                ) : reports.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {reports.map(report => (
                             <ReportCard
                                 key={report.id}
                                 report={report}
-                                onEdit={() => handleEditReport(report)}
-                                onDelete={() => handleDeleteReportConfirm(report.id, report.date)}
-                                onReview={() => setReportToReview(report)}
-                                canEdit={permissions.canEditReport(currentUser, project)}
-                                canDelete={permissions.canDeleteReport(currentUser, project)}
-                                canReview={canReviewReports}
+                                onViewDetails={() => setViewingReport(report)}
                                 review={report.managerReview}
                                 reviewerName={report.managerReview?.reviewedByName || (report.managerReview ? getUserName(report.managerReview.reviewedById) : '')}
                             />
@@ -367,23 +403,18 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary transition-colors"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                                </svg>
+                                <ExternalLinkIcon className="h-5 w-5 mr-2" />
                                 Mở trong Google Sheets để chỉnh sửa
                             </a>
                         </div>
                     )}
-                    <div className="p-1">
-                        <div className="aspect-video">
-                            <iframe
-                                src={embedUrl}
-                                className="w-full h-full border-0"
-                                title="Kế hoạch tiến độ dự án"
-                                allowFullScreen
-                            ></iframe>
-                        </div>
+                    <div className="w-full h-[75vh]">
+                        <iframe
+                            src={embedUrl}
+                            className="w-full h-full border-0"
+                            title="Kế hoạch tiến độ dự án"
+                            allowFullScreen
+                        ></iframe>
                     </div>
                 </div>
             );
@@ -410,9 +441,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             <div className="flex justify-between items-start flex-wrap gap-4">
                 <div>
                     <button onClick={onBack} className="text-secondary hover:text-accent font-semibold flex items-center mb-2">
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                         <ArrowLeftIcon className="h-5 w-5 mr-2" />
                         Trở về Dashboard
                     </button>
                     <h2 className="text-3xl font-bold text-gray-800">{project.name}</h2>
@@ -484,6 +513,36 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                     message={`Bạn có chắc chắn muốn xóa báo cáo ngày "${reportToDelete.date}"?`}
                     onConfirm={executeDeleteReport}
                     onCancel={() => setReportToDelete(null)}
+                />
+            )}
+            {lightboxImages && (
+                <ImageLightbox 
+                    images={lightboxImages}
+                    startIndex={lightboxIndex}
+                    onClose={() => setLightboxImages(null)}
+                />
+            )}
+             {viewingReport && (
+                <ReportDetailsModal
+                    report={viewingReport}
+                    project={project}
+                    currentUser={currentUser}
+                    review={viewingReport.managerReview}
+                    reviewerName={viewingReport.managerReview?.reviewedByName || (viewingReport.managerReview ? getUserName(viewingReport.managerReview.reviewedById) : '')}
+                    onClose={() => setViewingReport(null)}
+                    onEdit={(reportToEdit) => {
+                        setViewingReport(null);
+                        handleEditReport(reportToEdit);
+                    }}
+                    onDelete={(reportId, reportDate) => {
+                        setViewingReport(null);
+                        handleDeleteReportConfirm(reportId, reportDate);
+                    }}
+                    onReview={(reportToReview) => {
+                        setViewingReport(null);
+                        setReportToReview(reportToReview);
+                    }}
+                    onImageClick={handleImageClick}
                 />
             )}
         </div>
