@@ -1,16 +1,18 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth';
 import {
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   orderBy,
   addDoc,
   updateDoc,
   deleteDoc,
+  QuerySnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 import { auth, db } from './services/firebase';
 import type { User, Project, DailyReport } from './types';
@@ -63,7 +65,9 @@ const App: React.FC = () => {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const unsubscribe = onSnapshot(userDocRef, (userDoc) => {
             if (userDoc.exists()) {
-                const userData = { id: userDoc.id, ...userDoc.data() } as User;
+                // FIX: Use non-null assertion `!` because the type checker is not correctly inferring
+                // that `userDoc.data()` is defined inside the `userDoc.exists()` block. This is safe.
+                const userData = { id: userDoc.id, ...userDoc.data()! } as User;
                 setCurrentUser(userData);
             } else {
                 console.error("User document not found in Firestore!");
@@ -92,7 +96,9 @@ const App: React.FC = () => {
 
         // Fetch projects with real-time updates
         const projectsQuery = query(collection(db, 'projects'), orderBy('name'));
-        const projectsUnsubscribe = onSnapshot(projectsQuery, (snapshot) => {
+        // FIX: Explicitly type `snapshot` as `QuerySnapshot<DocumentData>` to fix incorrect type inference
+        // that was causing `snapshot.docs` to be flagged as an error.
+        const projectsUnsubscribe = onSnapshot(projectsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
             const allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
             
             if (permissions.canAddProject(currentUser)) { // Admin, DeptHead see all
@@ -111,7 +117,8 @@ const App: React.FC = () => {
 
         // Fetch reports with real-time updates
         const reportsQuery = query(collection(db, 'reports'), orderBy('date', 'desc'));
-        const reportsUnsubscribe = onSnapshot(reportsQuery, (snapshot) => {
+        // FIX: Explicitly type `snapshot` as `QuerySnapshot<DocumentData>` to fix incorrect type inference.
+        const reportsUnsubscribe = onSnapshot(reportsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
             const allReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyReport));
             setReports(allReports);
         }, (error) => console.error("Error fetching reports:", error));
@@ -120,7 +127,8 @@ const App: React.FC = () => {
         let usersUnsubscribe = () => {};
         if (permissions.canFetchAllUsers(currentUser)) {
             const usersQuery = query(collection(db, 'users'), orderBy('name'));
-            usersUnsubscribe = onSnapshot(usersQuery, (snapshot) => {
+            // FIX: Explicitly type `snapshot` as `QuerySnapshot<DocumentData>` to fix incorrect type inference.
+            usersUnsubscribe = onSnapshot(usersQuery, (snapshot: QuerySnapshot<DocumentData>) => {
                 const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
                 setUsers(allUsers);
             }, (error) => {
