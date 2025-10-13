@@ -58,10 +58,11 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onUpdateUser, onCance
             id="role"
             name="role"
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary bg-white text-gray-900"
-            value={formData.role}
+            value={formData.role || ''}
             onChange={handleChange}
             required
           >
+            <option value="" disabled>-- Chọn vai trò --</option>
             {Object.values(Role).map(roleValue => (
               <option key={roleValue} value={roleValue}>{roleValue}</option>
             ))}

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser, signInWithPopup } from 'firebase/auth';
 import {
   collection,
   doc,
   onSnapshot,
   query,
-  orderBy,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -16,9 +15,11 @@ import {
   getDocs,
   getDoc,
   deleteField,
+  setDoc,
+  orderBy,
 } from 'firebase/firestore';
-import { auth, db } from './services/firebase';
-import type { User, Project, DailyReport, ProjectReview } from './types';
+import { auth, db, googleProvider } from './services/firebase';
+import type { User, Project, DailyReport, ProjectReview, Role } from './types';
 import { permissions } from './services/permissions';
 
 // Components
@@ -32,6 +33,7 @@ import ConfirmationModal from './components/ConfirmationModal';
 import Toast from './components/Toast';
 import ProjectCardSkeleton from './components/ProjectCardSkeleton';
 import Footer from './components/Footer';
+import ApproveUserModal from './components/ApproveUserModal';
 
 
 type AppView = 'dashboard' | 'projectDetails' | 'addProject' | 'userManagement';
@@ -42,6 +44,8 @@ const App: React.FC = () => {
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [authError, setAuthError] = useState<string | null>(null);
+    const [isAuthLoading, setIsAuthLoading] = useState(true);
+
 
     // Data state
     const [projects, setProjects] = useState<Project[]>([]);
@@ -54,6 +58,7 @@ const App: React.FC = () => {
     const [isProjectsLoading, setIsProjectsLoading] = useState(true);
     const [isReportsLoading, setIsReportsLoading] = useState(true);
     const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+    const [userToApprove, setUserToApprove] = useState<User | null>(null);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     
     const addToast = (message: string, type: 'success' | 'error') => {
@@ -64,21 +69,45 @@ const App: React.FC = () => {
         }, 4000);
     };
 
-    // Effect for handling auth state changes
+    // Effect for handling auth state changes and creating user profiles.
+    // This is the most reliable place to handle user profile creation.
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            setFirebaseUser(user);
-            if (!user) {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userDocRef);
+
+                if (!userDoc.exists()) {
+                    // This is a new user. Create their profile document in Firestore.
+                    try {
+                        await setDoc(userDocRef, {
+                            email: user.email,
+                            name: user.displayName || 'Người dùng mới',
+                            role: null, // Pending approval
+                        });
+                        console.log(`Created user document for ${user.email}`);
+                    } catch (error) {
+                        console.error("Error creating user document:", error);
+                    }
+                }
+                setFirebaseUser(user);
+            } else {
+                // User is signed out
+                setFirebaseUser(null);
                 setCurrentUser(null);
-                setIsProjectsLoading(false);
+                setIsAuthLoading(false);
             }
         });
         return () => unsubscribe();
     }, []);
 
-    // Effect for fetching user profile once authenticated
+    // Effect for fetching the current user's profile from Firestore
+    // This runs after onAuthStateChanged sets the firebaseUser
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!firebaseUser) {
+            setIsAuthLoading(false);
+            return;
+        };
 
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const unsubscribe = onSnapshot(userDocRef, (userDoc: DocumentSnapshot<DocumentData>) => {
@@ -87,13 +116,16 @@ const App: React.FC = () => {
                 const userData = { id: userDoc.id, ...data } as User;
                 setCurrentUser(userData);
             } else {
-                console.error("User document not found in Firestore!");
-                signOut(auth);
+                // This state can happen briefly for a new user while their doc is being created.
+                // The listener will fire again once the document is created by onAuthStateChanged.
+                setCurrentUser(null);
             }
+            setIsAuthLoading(false);
         }, (error) => {
             console.error("Error fetching user data:", error);
             setAuthError("Failed to load user profile.");
             signOut(auth);
+            setIsAuthLoading(false);
         });
 
         return () => unsubscribe();
@@ -101,11 +133,16 @@ const App: React.FC = () => {
 
     // Effect for fetching projects and users for ADMINS (who can see everything)
     useEffect(() => {
-        if (!currentUser) {
+        if (!currentUser || !currentUser.role) { // Don't fetch data for pending users
             setProjects([]);
-            setUsers([]);
-            setIsProjectsLoading(false);
-            return () => {};
+            // Still need to fetch users if admin, to see pending users
+             if (currentUser && permissions.canFetchAllUsers(currentUser)) {
+                 // continue
+             } else {
+                setUsers([]);
+                setIsProjectsLoading(false);
+                return () => {};
+             }
         }
 
         setIsProjectsLoading(true);
@@ -113,13 +150,16 @@ const App: React.FC = () => {
 
         // For non-Admins, set the users array to just them. Others will be loaded if needed.
         if (!permissions.canFetchAllUsers(currentUser)) {
-            setUsers([currentUser]);
+           if(currentUser) setUsers([currentUser]);
         }
         // Fetch all users only for Admins
         else {
-            const usersQuery = query(collection(db, 'users'), orderBy('name'));
+            const usersQuery = query(collection(db, 'users'));
             const usersUnsubscribe = onSnapshot(usersQuery, (snapshot: QuerySnapshot<DocumentData>) => {
-                setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+                const fetchedUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                // Sort client-side to handle users that might be missing a 'name' field
+                fetchedUsers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                setUsers(fetchedUsers);
             }, (error) => {
                 console.error("Error fetching users:", error);
                 setUsers([]);
@@ -138,7 +178,7 @@ const App: React.FC = () => {
                 setIsProjectsLoading(false);
             });
             unsubs.push(projectsUnsubscribe);
-        } else { // PMs and Supervisors get assigned projects
+        } else if (currentUser) { // PMs and Supervisors get assigned projects
             const pmQuery = query(collection(db, 'projects'), where('projectManagerIds', 'array-contains', currentUser.id));
             const lsQuery = query(collection(db, 'projects'), where('leadSupervisorIds', 'array-contains', currentUser.id));
 
@@ -181,7 +221,7 @@ const App: React.FC = () => {
 
     // Effect for fetching reports for visible projects
     useEffect(() => {
-        if (!currentUser || projects.length === 0) {
+        if (!currentUser || !currentUser.role || projects.length === 0) {
             setReports([]);
             setIsReportsLoading(false);
             return () => {};
@@ -247,10 +287,26 @@ const App: React.FC = () => {
             setAuthError("Email hoặc mật khẩu không đúng.");
         }
     };
+    
+    const handleGoogleLogin = async () => {
+        setAuthError(null);
+        try {
+            // The onAuthStateChanged listener will handle profile creation.
+            // This function just needs to initiate the sign-in process.
+            await signInWithPopup(auth, googleProvider);
+        } catch (error: any) {
+            console.error("Google login error:", error);
+            if (error.code === 'auth/popup-closed-by-user') {
+                return;
+            }
+            setAuthError("Đã xảy ra lỗi khi đăng nhập với Google. Vui lòng thử lại.");
+        }
+    };
 
     const handleLogout = async () => {
         await signOut(auth);
         setCurrentUser(null);
+        setFirebaseUser(null);
         setView('dashboard');
         setSelectedProjectId(null);
     };
@@ -381,6 +437,11 @@ const App: React.FC = () => {
         }
     };
 
+    const handleApproveUser = (user: User, role: Role) => {
+        handleUpdateUser({ ...user, role });
+        setUserToApprove(null);
+    };
+
     const handleDeleteUser = async (userId: string) => {
         if (currentUser && userId === currentUser.id) {
             addToast("Bạn không thể tự xóa chính mình.", 'error');
@@ -407,7 +468,7 @@ const App: React.FC = () => {
     };
 
     // Render logic
-    if (isProjectsLoading && !currentUser) {
+    if (isAuthLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-base-200">
                 <p className="text-xl">Đang tải ứng dụng...</p>
@@ -415,8 +476,51 @@ const App: React.FC = () => {
         );
     }
 
+    if (!firebaseUser) {
+        return <Login onLogin={handleLogin} onGoogleLogin={handleGoogleLogin} error={authError} />;
+    }
+
     if (!currentUser) {
-        return <Login onLogin={handleLogin} error={authError} />;
+         return (
+            <div className="min-h-screen bg-neutral flex flex-col">
+                <Header user={{id: firebaseUser.uid, email: firebaseUser.email || '', name: firebaseUser.displayName || '', role: null}} onLogout={handleLogout} />
+                <main className="flex-grow flex items-center justify-center p-4">
+                     <div className="text-center bg-base-100 p-8 sm:p-12 rounded-2xl shadow-xl max-w-lg mx-auto border border-gray-200">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-primary mb-4">Đang xử lý...</h2>
+                        <p className="text-gray-600">
+                            Đang kiểm tra thông tin tài khoản của bạn. Vui lòng đợi trong giây lát.
+                        </p>
+                     </div>
+                </main>
+                <Footer />
+            </div>
+        );
+    }
+    
+    if (!currentUser.role) {
+        return (
+            <div className="min-h-screen bg-neutral flex flex-col">
+                <Header user={currentUser} onLogout={handleLogout} />
+                <main className="flex-grow flex items-center justify-center p-4">
+                    <div className="text-center bg-base-100 p-8 sm:p-12 rounded-2xl shadow-xl max-w-lg mx-auto border border-gray-200">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-primary mb-4">Tài khoản đang chờ phê duyệt</h2>
+                        <p className="text-gray-600 mb-6">
+                            Tài khoản của bạn (<span className="font-semibold">{currentUser.email}</span>) đã được tạo thành công và đang chờ quản trị viên cấp quyền truy cập.
+                        </p>
+                        <p className="text-gray-600">
+                            Vui lòng liên hệ quản trị viên để hoàn tất quá trình.
+                        </p>
+                         <button
+                            onClick={handleLogout}
+                            className="mt-8 bg-accent hover:opacity-90 text-white font-bold py-2 px-8 rounded-md transition-colors"
+                        >
+                            Đăng xuất
+                        </button>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
     }
 
     const renderContent = () => {
@@ -445,11 +549,33 @@ const App: React.FC = () => {
             case 'addProject':
                  return <AddProjectForm onAddProject={handleAddProject} onCancel={handleBackToDashboard} users={users} />;
             case 'userManagement':
-                return <UserManagement users={users} currentUser={currentUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onBack={handleBackToDashboard} />;
+                return <UserManagement users={users} currentUser={currentUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onBack={handleBackToDashboard} onApproveUser={setUserToApprove} />;
             case 'dashboard':
             default:
+                const pendingUsers = users.filter(u => !u.role);
                 return (
                     <div className="animate-fade-in">
+                        {permissions.canManageUsers(currentUser) && pendingUsers.length > 0 && (
+                            <div className="mb-8 p-4 sm:p-6 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg shadow-md animate-fade-in">
+                                <h3 className="text-lg sm:text-xl font-bold text-yellow-800 mb-4">Tài khoản chờ Phê duyệt ({pendingUsers.length})</h3>
+                                <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                    {pendingUsers.map(user => (
+                                        <div key={user.id} className="flex justify-between items-center bg-white p-3 rounded-md shadow-sm">
+                                            <div>
+                                                <p className="font-semibold text-gray-800">{user.name}</p>
+                                                <p className="text-sm text-gray-500">{user.email}</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => setUserToApprove(user)}
+                                                className="bg-success text-white font-bold py-1 px-3 rounded-md hover:bg-green-700 transition-colors text-sm whitespace-nowrap"
+                                            >
+                                                Phê duyệt
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                             <h2 className="text-3xl font-bold text-gray-800">Danh sách Dự án</h2>
                             <div className="flex gap-2 sm:gap-4">
@@ -503,6 +629,13 @@ const App: React.FC = () => {
                     message={`Bạn có chắc chắn muốn xóa dự án "${projectToDelete.name}"?\nTất cả báo cáo và nhận xét liên quan cũng sẽ bị xóa vĩnh viễn.`}
                     onConfirm={confirmDeleteProject}
                     onCancel={() => setProjectToDelete(null)}
+                />
+            )}
+             {userToApprove && (
+                <ApproveUserModal 
+                    user={userToApprove}
+                    onApprove={handleApproveUser}
+                    onCancel={() => setUserToApprove(null)}
                 />
             )}
             <div className="fixed bottom-4 right-4 z-50 space-y-2">

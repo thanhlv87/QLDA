@@ -72,6 +72,15 @@ export const permissions = {
   },
   
   /**
+   * Checks if a user can view the Approvals tab.
+   */
+  canViewApprovalsTab(user: User | null): boolean {
+    if (!user || typeof user.role !== 'string') return false;
+    const userRole = user.role.trim().toLowerCase();
+    return ['admin', 'departmenthead', 'projectmanager'].includes(userRole);
+  },
+
+  /**
    * Checks if a user can review/comment on a report.
    */
   canReviewReport(user: User | null, project: Project): boolean {

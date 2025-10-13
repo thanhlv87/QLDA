@@ -107,7 +107,7 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                               onChange={handleChange} 
                               placeholder="Dán link nhúng (src) từ Google Sheets..."
                             />
-                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' &gt; 'Chia sẻ' &gt; 'Xuất bản lên web' &gt; 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
+                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' > 'Chia sẻ' > 'Xuất bản lên web' > 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
                         </div>
                          <div>
                             <Input 
@@ -192,13 +192,13 @@ const EditProjectForm: React.FC<EditProjectFormProps> = ({ project, onUpdateProj
                 <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Thông tin các Đơn vị & Cán bộ</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        <div className="space-y-3 p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
                             <h4 className="font-medium text-gray-800">Cán bộ Quản lý Dự án</h4>
                             <Input label="Tên phòng" name="projectManagementUnit.departmentName" value={formData.projectManagementUnit?.departmentName || ''} onChange={handleChange} />
                             <Input label="Tên Cán bộ" name="projectManagementUnit.personnelName" value={formData.projectManagementUnit?.personnelName || ''} onChange={handleChange} />
                             <Input label="SĐT" name="projectManagementUnit.phone" value={formData.projectManagementUnit?.phone || ''} onChange={handleChange} />
                         </div>
-                        <div className="space-y-3 p-4 bg-blue-50 rounded-md border border-blue-200">
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
                             <h4 className="font-medium text-gray-800">Giám sát A của đơn vị QLVH</h4>
                             <Input label="Tên XNDV" name="supervisorA.enterpriseName" value={formData.supervisorA?.enterpriseName || ''} onChange={handleChange} />
                             <Input label="Tên Cán bộ" name="supervisorA.personnelName" value={formData.supervisorA?.personnelName || ''} onChange={handleChange} />

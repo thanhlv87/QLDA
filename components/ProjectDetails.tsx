@@ -11,6 +11,7 @@ import ConfirmationModal from './ConfirmationModal';
 import ImageLightbox from './ImageLightbox'; // New component for image gallery
 import ReportCardSkeleton from './ReportCardSkeleton'; // New component for loading state
 import ReportDetailsModal from './ReportDetailsModal'; // New component for report details
+// FIX: Removed CheckCircleIcon and ClockIcon as they are not used and were causing import errors.
 import { ArrowLeftIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CompanyIcon, ExternalLinkIcon, PhoneIcon, UserCircleIcon, UserGroupIcon, XIcon } from './Icons';
 
 
@@ -121,7 +122,18 @@ interface ProjectDetailsProps {
 }
 
 type DetailsView = 'details' | 'editProject' | 'addReport' | 'editReport';
-type ActiveTab = 'reports' | 'info' | 'workItems';
+type ActiveTab = 'reports' | 'approvals' | 'workItems' | 'info';
+
+const getDefaultTabForRole = (role: Role | null): ActiveTab => {
+    switch (role) {
+        case Role.ProjectManager:
+        case Role.DepartmentHead:
+            return 'reports';
+        case Role.LeadSupervisor:
+        default:
+            return 'reports';
+    }
+};
 
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     project,
@@ -138,7 +150,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     onAddReportReview,
 }) => {
     const [view, setView] = useState<DetailsView>('details');
-    const [activeTab, setActiveTab] = useState<ActiveTab>('reports');
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() => getDefaultTabForRole(currentUser?.role || null));
     const [selectedReportToEdit, setSelectedReportToEdit] = useState<DailyReport | null>(null);
     const [reportToDelete, setReportToDelete] = useState<{ id: string; date: string } | null>(null);
     const [reportToReview, setReportToReview] = useState<DailyReport | null>(null);
@@ -169,8 +181,8 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     useEffect(() => {
         setAiSummary('');
         setDisplayedAiSummary('');
-        setActiveTab('reports');
-    }, [project.id]);
+        setActiveTab(getDefaultTabForRole(currentUser?.role || null));
+    }, [project.id, currentUser?.role]);
 
     const handleGenerateSummary = async () => {
         setIsGeneratingSummary(true);
@@ -188,11 +200,13 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     };
     
     const handleEditReport = (report: DailyReport) => {
+        setViewingReport(null); // Close details modal first
         setSelectedReportToEdit(report);
         setView('editReport');
     };
     
     const handleDeleteReportConfirm = (reportId: string, reportDate: string) => {
+        setViewingReport(null);
         setReportToDelete({ id: reportId, date: reportDate });
     };
 
@@ -222,6 +236,8 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
     const canAddReport = useMemo(() => permissions.canAddReport(currentUser, project), [currentUser, project]);
     const canEditProject = useMemo(() => permissions.canEditProject(currentUser, project), [currentUser, project]);
+// FIX: Corrected call to a non-existent permission function.
+    const canViewApprovals = useMemo(() => permissions.canViewApprovalsTab(currentUser), [currentUser]);
 
     const projectManagers = useMemo(() => 
         users.filter(u => project.projectManagerIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-400">Chưa gán</span>,
@@ -271,281 +287,192 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             />
         );
     }
+    
+    const TabButton: React.FC<{ tabName: ActiveTab; label: string }> = ({ tabName, label }) => (
+        <button
+            onClick={() => setActiveTab(tabName)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === tabName
+                    ? 'border-b-2 border-secondary text-secondary'
+                    : 'text-gray-500 hover:text-gray-800'
+            }`}
+        >
+            {label}
+        </button>
+    );
 
-    const renderProjectInfo = () => (
-         <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200 animate-fade-in">
-            {currentUser?.role === Role.Admin && (
-                <DetailSection title="Nhân sự Phụ trách (Phân quyền)">
-                    <DetailItem label="Cán bộ Quản lý" value={projectManagers} icon={<UserGroupIcon />} />
-                    <DetailItem label="Giám sát trưởng" value={leadSupervisors} icon={<UserGroupIcon />} />
-                </DetailSection>
+    return (
+      <div className="animate-fade-in">
+        <header className="mb-6">
+            <button onClick={onBack} className="text-secondary hover:text-accent font-semibold flex items-center mb-4">
+                <ArrowLeftIcon className="h-5 w-5 mr-2" />
+                Trở về Dashboard
+            </button>
+            <div className="flex justify-between items-start flex-wrap gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-gray-800">{project.name}</h2>
+                </div>
+                <div className="flex gap-2 sm:gap-4">
+                    {canEditProject && (
+                        <button onClick={() => setView('editProject')} className="bg-neutral text-primary font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">
+                            Chỉnh sửa Dự án
+                        </button>
+                    )}
+                    {canAddReport && (
+                        <button onClick={() => setView('addReport')} className="bg-primary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity">
+                            Thêm Báo cáo +
+                        </button>
+                    )}
+                </div>
+            </div>
+        </header>
+
+        <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-2 sm:space-x-6" aria-label="Tabs">
+                <TabButton tabName="reports" label="Báo cáo" />
+                {canViewApprovals && <TabButton tabName="approvals" label="Phê duyệt" />}
+                <TabButton tabName="workItems" label="Hạng mục" />
+                <TabButton tabName="info" label="Thông tin" />
+            </nav>
+        </div>
+
+        <div>
+            {activeTab === 'reports' && (
+                <div className="space-y-6">
+                    <div className="bg-base-100 p-6 rounded-lg shadow-md border border-gray-200">
+                        <h3 className="text-xl font-bold text-primary mb-4">Tóm tắt tiến độ bằng AI</h3>
+                        <div className="prose prose-sm max-w-none text-gray-800 mb-4 whitespace-pre-wrap">{displayedAiSummary || (isGeneratingSummary ? 'AI đang phân tích...' : 'Bấm nút để tạo tóm tắt.')}</div>
+                        <button onClick={handleGenerateSummary} disabled={isGeneratingSummary || reports.length === 0} className="bg-secondary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 disabled:bg-gray-400">
+                            {isGeneratingSummary ? 'Đang tạo...' : 'Tạo tóm tắt'}
+                        </button>
+                        {reports.length === 0 && <p className="text-xs text-gray-500 mt-2 italic">Cần có ít nhất một báo cáo để tạo tóm tắt.</p>}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {isReportsLoading ? (
+                            [...Array(8)].map((_, i) => <ReportCardSkeleton key={i} />)
+                        ) : reports.length > 0 ? (
+                            reports.map(report => (
+                                <ReportCard 
+                                    key={report.id} 
+                                    report={report}
+                                    onViewDetails={() => setViewingReport(report)}
+                                    review={report.managerReview}
+                                    reviewerName={report.managerReview ? getUserName(report.managerReview.reviewedById) : undefined}
+                                />
+                            ))
+                        ) : (
+                            <p className="col-span-full text-center text-gray-500 py-8">Chưa có báo cáo nào cho dự án này.</p>
+                        )}
+                    </div>
+                </div>
             )}
-
-             <DetailSection title="Mốc thời gian">
-                <DetailItem label="Ngày triển khai thi công" value={project.constructionStartDate} icon={<CalendarIcon />} />
-                <DetailItem label="Ngày nghiệm thu theo kế hoạch" value={project.plannedAcceptanceDate} icon={<CalendarIcon />} />
-            </DetailSection>
-
-            <DetailSection title="Thông tin Phê duyệt">
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+            
+            {activeTab === 'approvals' && canViewApprovals && (
+                <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200 animate-fade-in grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <ApprovalCard title="Kế hoạch vốn" approval={project.capitalPlanApproval} />
                     <ApprovalCard title="Phương án kỹ thuật" approval={project.technicalPlanApproval} />
                     <ApprovalCard title="Dự toán" approval={project.budgetApproval} />
                 </div>
-            </DetailSection>
-            
-            <DetailSection title="Thông tin các Đơn vị & Cán bộ">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
-                    <ContactCard title="Cán bộ Quản lý Dự án" details={[
-                        { label: 'Tên phòng', value: project.projectManagementUnit?.departmentName || '', icon: <CompanyIcon /> },
-                        { label: 'Tên Cán bộ', value: project.projectManagementUnit?.personnelName || '', icon: <UserCircleIcon /> },
-                        { label: 'SĐT', value: project.projectManagementUnit?.phone || '', icon: <PhoneIcon /> },
-                    ]} />
-                    <ContactCard title="Giám sát A (QLVH)" details={[
-                        { label: 'Tên XNDV', value: project.supervisorA?.enterpriseName || '', icon: <CompanyIcon /> },
-                        { label: 'Tên Cán bộ', value: project.supervisorA?.personnelName || '', icon: <UserCircleIcon /> },
-                        { label: 'SĐT', value: project.supervisorA?.phone || '', icon: <PhoneIcon /> },
-                    ]} />
-                     <ContactCard title="Đơn vị Thiết kế" details={[
-                        { label: 'Tên công ty', value: project.designUnit.companyName, icon: <CompanyIcon /> },
-                        { label: 'Chủ nhiệm đề án', value: project.designUnit.personnelName, icon: <UserCircleIcon /> },
-                        { label: 'SĐT', value: project.designUnit.phone, icon: <PhoneIcon /> },
-                    ]} />
-                    <ContactCard title="Đơn vị Thi công" details={[
-                        { label: 'Tên công ty', value: project.constructionUnit.companyName, icon: <CompanyIcon /> },
-                        { label: 'Chỉ huy trưởng', value: project.constructionUnit.personnelName, icon: <UserCircleIcon /> },
-                        { label: 'SĐT', value: project.constructionUnit.phone, icon: <PhoneIcon /> },
-                    ]} />
-                    <ContactCard title="Đơn vị Giám sát" details={[
-                        { label: 'Tên công ty', value: project.supervisionUnit.companyName, icon: <CompanyIcon /> },
-                        { label: 'Giám sát trưởng', value: project.supervisionUnit.personnelName, icon: <UserCircleIcon /> },
-                        { label: 'SĐT', value: project.supervisionUnit.phone, icon: <PhoneIcon /> },
-                    ]} />
-                </div>
-            </DetailSection>
-        </div>
-    );
+            )}
 
-    const renderReports = () => (
-         <div className="animate-fade-in space-y-8">
-            <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-primary">Tóm tắt tiến độ (AI)</h3>
-                    <button 
-                        onClick={handleGenerateSummary} 
-                        disabled={isGeneratingSummary}
-                        className="bg-primary text-white font-semibold py-2 px-4 rounded-md hover:opacity-90 disabled:bg-gray-400 disabled:cursor-wait transition-colors"
-                    >
-                        {isGeneratingSummary ? 'Đang tạo...' : 'Tạo tóm tắt'}
-                    </button>
-                </div>
-                {isGeneratingSummary && !displayedAiSummary && <p className="text-gray-600">AI đang phân tích báo cáo, vui lòng chờ...</p>}
-                {displayedAiSummary && (
-                    <div className="prose max-w-none text-gray-700 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: displayedAiSummary.replace(/\n/g, '<br />') }}></div>
-                )}
-            </div>
-            
-            <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200">
-                <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-                    <h3 className="text-xl font-bold text-primary">Báo cáo hàng ngày</h3>
-                    {canAddReport && (
-                        <button onClick={() => setView('addReport')} className="bg-success text-white font-bold py-2 px-6 rounded-md hover:bg-green-700 transition-colors">
-                            + Gửi báo cáo mới
-                        </button>
-                    )}
-                </div>
-
-                {isReportsLoading ? (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {[...Array(4)].map((_, i) => <ReportCardSkeleton key={i} />)}
-                    </div>
-                ) : reports.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {reports.map(report => (
-                            <ReportCard
-                                key={report.id}
-                                report={report}
-                                onViewDetails={() => setViewingReport(report)}
-                                review={report.managerReview}
-                                reviewerName={report.managerReview?.reviewedByName || (report.managerReview ? getUserName(report.managerReview.reviewedById) : '')}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-8">
-                        <p className="text-gray-500">Chưa có báo cáo nào cho dự án này.</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-    
-    const renderWorkItemsTab = () => {
-        const getEmbedUrl = (urlOrHtml: string | undefined): string | null => {
-            if (!urlOrHtml) return null;
-            if (urlOrHtml.trim().startsWith('<iframe')) {
-                const match = urlOrHtml.match(/src="([^"]+)"/);
-                return match ? match[1] : null;
-            }
-            return urlOrHtml;
-        };
-
-        const embedUrl = getEmbedUrl(project.scheduleSheetUrl);
-
-        if (embedUrl) {
-            return (
-                <div className="bg-base-100 rounded-lg shadow-md border border-gray-200 animate-fade-in overflow-hidden">
-                    {project.scheduleSheetEditUrl && (
-                        <div className="p-3 bg-gray-50 border-b flex justify-end items-center">
-                            <a
-                                href={project.scheduleSheetEditUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary transition-colors"
-                            >
-                                <ExternalLinkIcon className="h-5 w-5 mr-2" />
-                                Mở trong Google Sheets để chỉnh sửa
-                            </a>
+            {activeTab === 'workItems' && (
+                <div className="bg-base-100 rounded-lg shadow-md p-0 border border-gray-200 animate-fade-in overflow-hidden">
+                    {project.scheduleSheetUrl ? (
+                         <iframe src={project.scheduleSheetUrl} className="w-full h-[70vh]" title="Project Schedule"></iframe>
+                    ) : (
+                        <div className="p-8 text-center text-gray-500">
+                            <p>Chưa có kế hoạch tiến độ nào được thêm vào.</p>
+                            {canEditProject && <p className="mt-2 text-sm">Vui lòng vào mục "Chỉnh sửa dự án" để thêm link nhúng từ Google Sheet.</p>}
                         </div>
                     )}
-                    <div className="w-full h-[75vh]">
-                        <iframe
-                            src={embedUrl}
-                            className="w-full h-full border-0"
-                            title="Kế hoạch tiến độ dự án"
-                            allowFullScreen
-                        ></iframe>
-                    </div>
                 </div>
-            );
-        }
+            )}
+            
+            {activeTab === 'info' && (
+                <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200 animate-fade-in">
+                    {currentUser?.role === Role.Admin && (
+                        <DetailSection title="Nhân sự Phụ trách (Phân quyền)">
+                            <DetailItem label="Cán bộ Quản lý" value={projectManagers} icon={<UserGroupIcon />} />
+                            <DetailItem label="Giám sát trưởng" value={leadSupervisors} icon={<UserGroupIcon />} />
+                        </DetailSection>
+                    )}
 
-        return (
-            <div className="bg-base-100 rounded-lg shadow-md p-8 border border-gray-200 animate-fade-in text-center">
-                <h3 className="text-xl font-bold text-primary mb-4">Chưa có Kế hoạch Tiến độ</h3>
-                <p className="text-gray-600 mb-6">
-                    Kế hoạch tiến độ chi tiết cho dự án này chưa được liên kết.
-                </p>
-                {canEditProject && (
-                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 text-left">
-                       <p className="font-semibold text-blue-800">Hướng dẫn:</p>
-                        <p className="text-blue-700">Vui lòng nhấn nút "Chỉnh sửa Dự án" và dán link nhúng (embed URL) từ Google Sheets vào trường "Kế hoạch Tiến độ" để hiển thị tại đây.</p>
-                    </div>
-                )}
-            </div>
-        );
-    };
+                    <DetailSection title="Mốc thời gian">
+{/* FIX: Corrected a syntax error where a component tag was incomplete. */}
+                        <DetailItem label="Ngày triển khai thi công" value={project.constructionStartDate} icon={<CalendarIcon />} />
+                        <DetailItem label="Ngày nghiệm thu theo kế hoạch" value={project.plannedAcceptanceDate} icon={<CalendarIcon />} />
+                    </DetailSection>
 
-    return (
-        <div className="animate-fade-in space-y-6">
-            <div className="flex justify-between items-start flex-wrap gap-4">
-                <div>
-                    <button onClick={onBack} className="text-secondary hover:text-accent font-semibold flex items-center mb-2">
-                         <ArrowLeftIcon className="h-5 w-5 mr-2" />
-                        Trở về Dashboard
-                    </button>
-                    <h2 className="text-3xl font-bold text-gray-800">{project.name}</h2>
+                     <DetailSection title="Thông tin các Đơn vị & Cán bộ">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <ContactCard title="Đơn vị Thiết kế" details={[
+                                { label: "Công ty", value: project.designUnit?.companyName, icon: <CompanyIcon /> },
+                                { label: "Chủ nhiệm", value: project.designUnit?.personnelName, icon: <UserCircleIcon /> },
+                                { label: "SĐT", value: project.designUnit?.phone, icon: <PhoneIcon /> },
+                            ]} />
+                             <ContactCard title="Đơn vị Thi công" details={[
+                                { label: "Công ty", value: project.constructionUnit?.companyName, icon: <CompanyIcon /> },
+                                { label: "Chỉ huy trưởng", value: project.constructionUnit?.personnelName, icon: <UserCircleIcon /> },
+                                { label: "SĐT", value: project.constructionUnit?.phone, icon: <PhoneIcon /> },
+                            ]} />
+                             <ContactCard title="Đơn vị Giám sát" details={[
+                                { label: "Công ty", value: project.supervisionUnit?.companyName, icon: <CompanyIcon /> },
+                                { label: "Giám sát trưởng", value: project.supervisionUnit?.personnelName, icon: <UserCircleIcon /> },
+                                { label: "SĐT", value: project.supervisionUnit?.phone, icon: <PhoneIcon /> },
+                            ]} />
+                             <ContactCard title="Cán bộ QLDA" details={[
+                                { label: "Phòng", value: project.projectManagementUnit?.departmentName, icon: <CompanyIcon /> },
+                                { label: "Cán bộ", value: project.projectManagementUnit?.personnelName, icon: <UserCircleIcon /> },
+                                { label: "SĐT", value: project.projectManagementUnit?.phone, icon: <PhoneIcon /> },
+                            ]} />
+                             <ContactCard title="Giám sát A (QLVH)" details={[
+                                { label: "XNDV", value: project.supervisorA?.enterpriseName, icon: <CompanyIcon /> },
+                                { label: "Cán bộ", value: project.supervisorA?.personnelName, icon: <UserCircleIcon /> },
+                                { label: "SĐT", value: project.supervisorA?.phone, icon: <PhoneIcon /> },
+                            ]} />
+                        </div>
+                    </DetailSection>
                 </div>
-                {canEditProject && (
-                    <button onClick={() => setView('editProject')} className="bg-secondary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity">
-                        Chỉnh sửa Dự án
-                    </button>
-                )}
-            </div>
-
-            {/* Tab Navigation */}
-            <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-                    <button
-                        onClick={() => setActiveTab('reports')}
-                        className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-                            activeTab === 'reports'
-                            ? 'border-secondary text-secondary'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                        aria-current={activeTab === 'reports' ? 'page' : undefined}
-                    >
-                        Báo cáo & Tiến độ
-                    </button>
-                     <button
-                        onClick={() => setActiveTab('workItems')}
-                        className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-                            activeTab === 'workItems'
-                            ? 'border-secondary text-secondary'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                        aria-current={activeTab === 'workItems' ? 'page' : undefined}
-                    >
-                        Hạng mục Công việc
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('info')}
-                        className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-                            activeTab === 'info'
-                            ? 'border-secondary text-secondary'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                        aria-current={activeTab === 'info' ? 'page' : undefined}
-                    >
-                        Thông tin Dự án
-                    </button>
-                </nav>
-            </div>
-            
-            {/* Tab Content */}
-            <div>
-                {activeTab === 'reports' && renderReports()}
-                {activeTab === 'info' && renderProjectInfo()}
-                {activeTab === 'workItems' && renderWorkItemsTab()}
-            </div>
-            
-            {/* Modals */}
-             {reportToReview && currentUser && (
-                <ReviewReportModal
-                    report={reportToReview}
-                    currentUser={currentUser}
-                    onClose={() => setReportToReview(null)}
-                    onAddReview={onAddReportReview}
-                />
-            )}
-            {reportToDelete && (
-                <ConfirmationModal
-                    message={`Bạn có chắc chắn muốn xóa báo cáo ngày "${reportToDelete.date}"?`}
-                    onConfirm={executeDeleteReport}
-                    onCancel={() => setReportToDelete(null)}
-                />
-            )}
-            {lightboxImages && (
-                <ImageLightbox 
-                    images={lightboxImages}
-                    startIndex={lightboxIndex}
-                    onClose={() => setLightboxImages(null)}
-                />
-            )}
-             {viewingReport && (
-                <ReportDetailsModal
-                    report={viewingReport}
-                    project={project}
-                    currentUser={currentUser}
-                    review={viewingReport.managerReview}
-                    reviewerName={viewingReport.managerReview?.reviewedByName || (viewingReport.managerReview ? getUserName(viewingReport.managerReview.reviewedById) : '')}
-                    onClose={() => setViewingReport(null)}
-                    onEdit={(reportToEdit) => {
-                        setViewingReport(null);
-                        handleEditReport(reportToEdit);
-                    }}
-                    onDelete={(reportId, reportDate) => {
-                        setViewingReport(null);
-                        handleDeleteReportConfirm(reportId, reportDate);
-                    }}
-                    onReview={(reportToReview) => {
-                        setViewingReport(null);
-                        setReportToReview(reportToReview);
-                    }}
-                    onImageClick={handleImageClick}
-                />
             )}
         </div>
+
+        {reportToDelete && (
+            <ConfirmationModal 
+                message={`Bạn có chắc chắn muốn xóa báo cáo ngày ${reportToDelete.date}?`}
+                onConfirm={executeDeleteReport}
+                onCancel={() => setReportToDelete(null)}
+            />
+        )}
+        {reportToReview && currentUser && (
+            <ReviewReportModal 
+                report={reportToReview}
+                currentUser={currentUser}
+                onClose={() => setReportToReview(null)}
+                onAddReview={onAddReportReview}
+            />
+        )}
+        {lightboxImages && (
+            <ImageLightbox 
+                images={lightboxImages}
+                startIndex={lightboxIndex}
+                onClose={() => setLightboxImages(null)}
+            />
+        )}
+        {viewingReport && (
+            <ReportDetailsModal 
+                report={viewingReport}
+                project={project}
+                currentUser={currentUser}
+                review={viewingReport.managerReview}
+                reviewerName={viewingReport.managerReview ? getUserName(viewingReport.managerReview.reviewedById) : undefined}
+                onClose={() => setViewingReport(null)}
+                onEdit={handleEditReport}
+                onDelete={handleDeleteReportConfirm}
+                onReview={setReportToReview}
+                onImageClick={handleImageClick}
+            />
+        )}
+      </div>
     );
 };
 

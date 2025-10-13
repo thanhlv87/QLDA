@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { LockClosedIcon, MailIcon } from './Icons';
 
+const GoogleIcon: React.FC = () => (
+    <svg className="w-5 h-5 mr-3" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+        <path fill="currentColor" d="M488 261.8C488 403.3 381.5 512 244 512 110.3 512 0 401.7 0 265.9c0-136 110.3-246.3 244-246.3 75.8 0 139.6 30.1 185.3 73.1l-68.5 67.2c-25.2-23.8-60-40.4-116.8-40.4-96.9 0-175.8 78.8-175.8 176.2s78.9 176.2 175.8 176.2c102.3 0 144.5-73.4 149-110.1H244V261.8h244z"></path>
+    </svg>
+);
+
+
 interface LoginProps {
   onLogin: (email: string, password: string) => Promise<void>;
+  onGoogleLogin: () => Promise<void>;
   error: string | null;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin, error }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +26,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
     await onLogin(email, password);
     setIsLoading(false);
   };
+  
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    await onGoogleLogin();
+    setIsLoading(false);
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
@@ -85,11 +99,35 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
             </div>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-2">
             <button type="submit" className="w-full bg-accent hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-orange-400/50 transform hover:scale-105" disabled={isLoading}>
               {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </button>
           </div>
+
+          <div className="relative flex items-center">
+            <div className="flex-grow border-t border-gray-300"></div>
+            <span className="flex-shrink mx-4 text-gray-400 text-sm">hoặc</span>
+            <div className="flex-grow border-t border-gray-300"></div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center bg-white hover:bg-gray-100 text-gray-700 font-semibold py-3 px-4 border border-gray-300 rounded-lg focus:outline-none focus:shadow-outline transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed shadow-md hover:shadow-lg transform hover:scale-105"
+          >
+            <GoogleIcon />
+            Đăng nhập với Google
+          </button>
+
+          <div className="text-center text-gray-500 text-xs pt-2 px-2">
+            <p className="font-bold text-secondary">Lưu ý cho người dùng mới:</p>
+            <p>
+              Vui lòng sử dụng "Đăng nhập với Google". Sau lần đăng nhập đầu tiên, tài khoản của bạn sẽ ở trạng thái chờ. Hãy liên hệ Quản trị viên để được phê duyệt và cấp quyền truy cập.
+            </p>
+          </div>
+
         </form>
       </div>
        <p className="text-center text-gray-500 text-xs mt-8">

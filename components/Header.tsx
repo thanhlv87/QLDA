@@ -18,7 +18,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                     {/* Desktop Menu */}
                     <div className="hidden sm:flex items-center space-x-4">
                         <div>
-                            <span className="font-medium">Chào, {user.name} ({user.role})</span>
+                            <span className="font-medium">Chào, {user.name} ({user.role || 'Chờ duyệt'})</span>
                         </div>
                         <button
                             onClick={onLogout}
@@ -40,7 +40,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                         <div className="sm:hidden absolute top-full right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-40 ring-1 ring-black ring-opacity-5 animate-fade-in">
                             <div className="px-4 py-3 border-b">
                                 <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
-                                <p className="text-xs text-gray-500">{user.role}</p>
+                                <p className="text-xs text-gray-500">{user.role || 'Chờ duyệt'}</p>
                             </div>
                             <a
                                 href="#"

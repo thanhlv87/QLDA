@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // Hardcoded Firebase configuration as per user request.
@@ -20,5 +20,6 @@ const app = initializeApp(firebaseConfig);
 // Get Firebase services
 const auth = getAuth(app);
 const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
 
-export { auth, db };
+export { auth, db, googleProvider };

@@ -88,3 +88,24 @@ export const LockClosedIcon: React.FC<IconProps> = (props) => (
         <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1Zm3 8V5.5a3 3 0 10-6 0V9h6Z" clipRule="evenodd" />
     </svg>
 );
+
+// FIX: Added missing ClockIcon component.
+export const ClockIcon: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" />
+    </svg>
+);
+
+// FIX: Added missing CheckCircleIcon component.
+export const CheckCircleIcon: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    </svg>
+);
+
+export const CheckBadgeIcon: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+      <path fillRule="evenodd" d="M16.403 12.652a3 3 0 00-2.83-2.175l-.005-.002-2.115-1.192a3 3 0 00-1.682-.478V5.5a3 3 0 00-3-3 3 3 0 00-1.743 5.342l-2.468 1.382a3 3 0 00-1.682 4.78 3 3 0 002.83 2.175l.005.002 2.114 1.192a3 3 0 001.682.478V14.5a3 3 0 003 3 3 3 0 001.743-5.342l2.468-1.382zM10 15a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+      <path d="M11.928 8.168a1 1 0 10-1.856-.664l-2.5 7 .004.002.002.002a1 1 0 001.856.664l2.5-7-.002-.002-.002-.002z" />
+    </svg>
+  );
