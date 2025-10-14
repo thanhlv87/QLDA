@@ -121,10 +121,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin, error }) => {
             Đăng nhập với Google
           </button>
 
-          <div className="text-center text-gray-500 text-xs pt-2 px-2">
+          <div className="text-center text-gray-500 text-sm pt-2 px-2">
             <p className="font-bold text-secondary">Lưu ý cho người dùng mới:</p>
             <p>
-              Vui lòng sử dụng "Đăng nhập với Google". Sau lần đăng nhập đầu tiên, tài khoản của bạn sẽ ở trạng thái chờ. Hãy liên hệ Quản trị viên để được phê duyệt và cấp quyền truy cập.
+              Vui lòng sử dụng "Đăng nhập với Google". Sau lần đăng nhập đầu tiên, tài khoản của bạn sẽ ở trạng thái chờ. Hãy liên hệ Quản trị viên (Thanh Lê - 0982722036) để được phê duyệt và cấp quyền truy cập.
             </p>
           </div>
 

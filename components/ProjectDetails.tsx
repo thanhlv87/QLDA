@@ -56,7 +56,7 @@ const ReviewReportModal: React.FC<{
                             required
                         />
                     </main>
-                    <footer className="p-4 bg-gray-50 flex justify-end space-x-3 rounded-b-lg">
+                    <footer className="p-4 border-t flex justify-end space-x-3 rounded-b-lg">
                         <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md hover:bg-gray-300">
                             Hủy
                         </button>
@@ -232,12 +232,18 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
         setLightboxImages(images);
         setLightboxIndex(startIndex);
     };
+
+    const handleStartReview = (report: DailyReport) => {
+      setViewingReport(null);
+      setReportToReview(report);
+    };
     
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
     const canAddReport = useMemo(() => permissions.canAddReport(currentUser, project), [currentUser, project]);
     const canEditProject = useMemo(() => permissions.canEditProject(currentUser, project), [currentUser, project]);
 // FIX: Corrected call to a non-existent permission function.
     const canViewApprovals = useMemo(() => permissions.canViewApprovalsTab(currentUser), [currentUser]);
+    const canUseAi = useMemo(() => permissions.canUseAiSummary(currentUser), [currentUser]);
 
     const projectManagers = useMemo(() => 
         users.filter(u => project.projectManagerIds.includes(u.id)).map(u => u.name).join(', ') || <span className="italic text-gray-400">Chưa gán</span>,
@@ -331,7 +337,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             <nav className="-mb-px flex space-x-2 sm:space-x-6" aria-label="Tabs">
                 <TabButton tabName="reports" label="Báo cáo" />
                 {canViewApprovals && <TabButton tabName="approvals" label="Phê duyệt" />}
-                <TabButton tabName="workItems" label="Hạng mục" />
+                <TabButton tabName="workItems" label="Bảng tiến độ thi công" />
                 <TabButton tabName="info" label="Thông tin" />
             </nav>
         </div>
@@ -339,14 +345,16 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
         <div>
             {activeTab === 'reports' && (
                 <div className="space-y-6">
-                    <div className="bg-base-100 p-6 rounded-lg shadow-md border border-gray-200">
-                        <h3 className="text-xl font-bold text-primary mb-4">Tóm tắt tiến độ bằng AI</h3>
-                        <div className="prose prose-sm max-w-none text-gray-800 mb-4 whitespace-pre-wrap">{displayedAiSummary || (isGeneratingSummary ? 'AI đang phân tích...' : 'Bấm nút để tạo tóm tắt.')}</div>
-                        <button onClick={handleGenerateSummary} disabled={isGeneratingSummary || reports.length === 0} className="bg-secondary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 disabled:bg-gray-400">
-                            {isGeneratingSummary ? 'Đang tạo...' : 'Tạo tóm tắt'}
-                        </button>
-                        {reports.length === 0 && <p className="text-xs text-gray-500 mt-2 italic">Cần có ít nhất một báo cáo để tạo tóm tắt.</p>}
-                    </div>
+                    {canUseAi && (
+                        <div className="bg-base-100 p-6 rounded-lg shadow-md border border-gray-200">
+                            <h3 className="text-xl font-bold text-primary mb-4">Tóm tắt tiến độ bằng AI</h3>
+                            <div className="prose prose-sm max-w-none text-gray-800 mb-4 whitespace-pre-wrap">{displayedAiSummary || (isGeneratingSummary ? 'AI đang phân tích...' : 'Bấm nút để tạo tóm tắt.')}</div>
+                            <button onClick={handleGenerateSummary} disabled={isGeneratingSummary || reports.length === 0} className="bg-secondary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 disabled:bg-gray-400">
+                                {isGeneratingSummary ? 'Đang tạo...' : 'Tạo tóm tắt'}
+                            </button>
+                            {reports.length === 0 && <p className="text-xs text-gray-500 mt-2 italic">Cần có ít nhất một báo cáo để tạo tóm tắt.</p>}
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {isReportsLoading ? (
                             [...Array(8)].map((_, i) => <ReportCardSkeleton key={i} />)
@@ -357,7 +365,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                                     report={report}
                                     onViewDetails={() => setViewingReport(report)}
                                     review={report.managerReview}
-                                    reviewerName={report.managerReview ? getUserName(report.managerReview.reviewedById) : undefined}
+                                    reviewerName={report.managerReview?.reviewedByName}
                                 />
                             ))
                         ) : (
@@ -376,15 +384,31 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             )}
 
             {activeTab === 'workItems' && (
-                <div className="bg-base-100 rounded-lg shadow-md p-0 border border-gray-200 animate-fade-in overflow-hidden">
-                    {project.scheduleSheetUrl ? (
-                         <iframe src={project.scheduleSheetUrl} className="w-full h-[70vh]" title="Project Schedule"></iframe>
-                    ) : (
-                        <div className="p-8 text-center text-gray-500">
-                            <p>Chưa có kế hoạch tiến độ nào được thêm vào.</p>
-                            {canEditProject && <p className="mt-2 text-sm">Vui lòng vào mục "Chỉnh sửa dự án" để thêm link nhúng từ Google Sheet.</p>}
-                        </div>
-                    )}
+                 <div className="bg-base-100 rounded-lg shadow-md border border-gray-200 animate-fade-in overflow-hidden">
+                    <div className="p-4 border-b flex justify-between items-center bg-white">
+                        <h3 className="text-xl font-bold text-primary">Bảng tiến độ thi công</h3>
+                        {project.scheduleSheetEditUrl && (
+                            <a 
+                                href={project.scheduleSheetEditUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 bg-secondary text-white font-bold py-2 px-4 rounded-md hover:opacity-90 transition-opacity"
+                            >
+                                <ExternalLinkIcon className="h-5 w-5" />
+                                Mở để Chỉnh sửa
+                            </a>
+                        )}
+                    </div>
+                    <div>
+                        {project.scheduleSheetUrl ? (
+                             <iframe src={project.scheduleSheetUrl} className="w-full h-[70vh] border-none" title="Bảng tiến độ thi công"></iframe>
+                        ) : (
+                            <div className="p-8 text-center text-gray-500">
+                                <p>Chưa có kế hoạch tiến độ nào được thêm vào.</p>
+                                {canEditProject && <p className="mt-2 text-sm">Vui lòng vào mục "Chỉnh sửa dự án" để thêm link nhúng từ Google Sheet.</p>}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
             
@@ -464,11 +488,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                 project={project}
                 currentUser={currentUser}
                 review={viewingReport.managerReview}
-                reviewerName={viewingReport.managerReview ? getUserName(viewingReport.managerReview.reviewedById) : undefined}
+                reviewerName={viewingReport.managerReview?.reviewedByName}
                 onClose={() => setViewingReport(null)}
                 onEdit={handleEditReport}
                 onDelete={handleDeleteReportConfirm}
-                onReview={setReportToReview}
+                onReview={handleStartReview}
                 onImageClick={handleImageClick}
             />
         )}

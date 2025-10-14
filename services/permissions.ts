@@ -79,13 +79,29 @@ export const permissions = {
     const userRole = user.role.trim().toLowerCase();
     return ['admin', 'departmenthead', 'projectmanager'].includes(userRole);
   },
+  
+  /**
+   * Checks if a user can use the AI summary feature.
+   */
+  canUseAiSummary(user: User | null): boolean {
+    if (!user || typeof user.role !== 'string') return false;
+    const userRole = user.role.trim().toLowerCase();
+    return ['admin', 'departmenthead'].includes(userRole);
+  },
 
   /**
    * Checks if a user can review/comment on a report.
+   * Department Heads can review any report for oversight.
+   * Project Managers can review reports for projects they are assigned to.
    */
   canReviewReport(user: User | null, project: Project): boolean {
     if (!user || typeof user.role !== 'string') return false;
     const userRole = user.role.trim().toLowerCase();
+    // Department Heads have global review permissions
+    if (userRole === 'departmenthead') {
+      return true;
+    }
+    // Project Managers can only review reports on their assigned projects
     return userRole === 'projectmanager' && project.projectManagerIds.includes(user.id);
   },
 
