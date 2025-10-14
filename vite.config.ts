@@ -8,4 +8,5 @@ export default defineConfig({
   root: '.',          // chỉ định gốc dự án là thư mục hiện tại
   build: {
     outDir: 'dist',   // đầu ra build
+    },
 })
