@@ -1,12 +1,88 @@
-import React, { useState } from 'react';
-import type { Project, User } from '../types';
-import { Role } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import type { Project, User } from '../types.ts';
+import { Role } from '../types.ts';
+import { XIcon, ChevronDownIcon } from './Icons.tsx';
 
 interface AddProjectFormProps {
     onAddProject: (project: Omit<Project, 'id'>) => void;
     onCancel: () => void;
     users: User[];
 }
+
+// Reusable component for a multi-select dropdown with checkboxes
+const MultiSelectCheckbox: React.FC<{
+    label: string;
+    options: { value: string; label: string; }[];
+    selectedValues: string[];
+    onChange: (selected: string[]) => void;
+    name: string;
+}> = ({ label, options, selectedValues, onChange, name }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [wrapperRef]);
+
+    const handleSelect = (value: string) => {
+        const newSelection = selectedValues.includes(value)
+            ? selectedValues.filter(v => v !== value)
+            : [...selectedValues, value];
+        onChange(newSelection);
+    };
+
+    const selectedLabels = options
+        .filter(opt => selectedValues.includes(opt.value))
+        .map(opt => opt.label)
+        .join(', ');
+
+    return (
+        <div className="relative" ref={wrapperRef}>
+            <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+            <button
+                type="button"
+                id={name}
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full p-2 border border-gray-300 rounded-md bg-white text-left text-gray-900 flex justify-between items-center h-10"
+            >
+                <span className="truncate pr-2">
+                    {selectedLabels || <span className="text-gray-500">Chọn nhân sự...</span>}
+                </span>
+                <ChevronDownIcon className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+                <div className="absolute top-full mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
+                    <ul>
+                        {options.map(option => (
+                            <li
+                                key={option.value}
+                                className="p-2 hover:bg-gray-100 cursor-pointer flex items-center"
+                                onClick={() => handleSelect(option.value)}
+                            >
+                                <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-secondary focus:ring-secondary mr-3 shrink-0"
+                                    checked={selectedValues.includes(option.value)}
+                                    readOnly
+                                />
+                                <span className="text-sm text-gray-900">{option.label}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, type = 'text', ...props }) => (
     <div>
@@ -48,11 +124,19 @@ const initialState: Omit<Project, 'id'> = {
   budgetApproval: { decisionNumber: '', date: '' },
   designUnit: { companyName: '', personnelName: '', phone: '' },
   constructionUnit: { companyName: '', personnelName: '', phone: '' },
-  supervisionUnit: { companyName: '', personnelName: '', phone: '' },
-  projectManagementUnit: { departmentName: '', personnelName: '', phone: '' },
+  supervisionUnit: { companyName: '', personnelName: '', phone: '' }, 
+  projectManagementUnits: [{ departmentName: '', personnelName: '', phone: '' }],
   supervisorA: { enterpriseName: '', personnelName: '', phone: '' },
   scheduleSheetUrl: '',
-  scheduleSheetEditUrl: ''
+  scheduleSheetEditUrl: '',
+
+  // New detailed fields
+  technicalPlanStage: { submissionDate: '', approvalDate: '' },
+  budgetStage: { submissionDate: '', approvalDate: '' },
+  designBidding: { itbIssuanceDate: '', contractSignDate: '' },
+  supervisionBidding: { itbIssuanceDate: '', contractSignDate: '' },
+  constructionBidding: { itbIssuanceDate: '', contractSignDate: '' },
+  finalSettlementStage: { submissionDate: '', approvalDate: '' },
 };
 
 
@@ -63,8 +147,18 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
         const { name, value, type } = e.target;
         const finalValue = type === 'date' ? toDMY(value) : value;
         const keys = name.split('.');
-
-        if (keys.length > 1) {
+        
+        if (keys[0] === 'projectManagementUnits' && keys.length === 3) {
+            const index = parseInt(keys[1], 10);
+            const field = keys[2];
+            setFormData(prev => {
+                const newUnits = [...(prev.projectManagementUnits || [])];
+                if (newUnits[index]) {
+                    newUnits[index] = { ...newUnits[index], [field]: finalValue };
+                }
+                return { ...prev, projectManagementUnits: newUnits };
+            });
+        } else if (keys.length > 1) {
             setFormData(prev => ({
                 ...prev,
                 [keys[0]]: {
@@ -83,13 +177,27 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
         }
     };
     
-    const handleMultiSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const { name, options } = e.target;
-        const value = Array.from(options)
-            .filter((option: HTMLOptionElement) => option.selected)
-            // FIX: Explicitly type `option` to resolve TS error where it was inferred as `unknown`.
-            .map((option: HTMLOptionElement) => option.value);
-        setFormData(prev => ({ ...prev, [name]: value }));
+    const handleMultiSelectCheckboxChange = (name: string, selectedIds: string[]) => {
+        setFormData(prev => ({ ...prev, [name]: selectedIds }));
+    };
+
+    const handleAddPmContact = () => {
+        setFormData(prev => ({
+            ...prev,
+            projectManagementUnits: [
+                ...(prev.projectManagementUnits || []),
+                { departmentName: '', personnelName: '', phone: '' }
+            ]
+        }));
+    };
+    
+    const handleRemovePmContact = (index: number) => {
+        setFormData(prev => {
+            const newUnits = (prev.projectManagementUnits || []).filter((_, i) => i !== index);
+            // Ensure at least one contact form remains
+            if (newUnits.length === 0) newUnits.push({ departmentName: '', personnelName: '', phone: '' });
+            return { ...prev, projectManagementUnits: newUnits };
+        });
     };
     
     const handleSubmit = (e: React.FormEvent) => {
@@ -99,6 +207,9 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
 
     const projectManagers = users.filter(u => u.role === Role.ProjectManager);
     const leadSupervisors = users.filter(u => u.role === Role.LeadSupervisor);
+
+    const projectManagerOptions = projectManagers.map(user => ({ value: user.id, label: user.name }));
+    const leadSupervisorOptions = leadSupervisors.map(user => ({ value: user.id, label: user.name }));
 
     return (
         <div className="bg-base-100 p-6 sm:p-8 rounded-lg shadow-lg border border-gray-200 animate-fade-in max-w-4xl mx-auto">
@@ -123,8 +234,7 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
                               onChange={handleChange} 
                               placeholder="Dán link nhúng (src) từ Google Sheets..."
                             />
-                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' &gt; 'Chia sẻ' &gt; 'Xuất bản lên web' &gt; 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
-
+                            <p className="text-xs text-gray-500 mt-1">Trong Google Sheet, chọn 'Tệp' > 'Chia sẻ' > 'Xuất bản lên web' > 'Nhúng', sau đó sao chép đường link trong thuộc tính 'src'.</p>
                         </div>
                          <div>
                             <Input 
@@ -142,76 +252,96 @@ const AddProjectForm: React.FC<AddProjectFormProps> = ({ onAddProject, onCancel,
                  <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Gán Nhân sự Phụ trách (để phân quyền)</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                        <div>
-                            <label htmlFor="projectManagerIds" className="block text-sm font-medium text-gray-700 mb-1">Cán bộ Quản lý (chọn nhiều)</label>
-                            <select
-                                id="projectManagerIds"
-                                name="projectManagerIds"
-                                multiple
-                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary h-32 bg-white text-gray-900"
-                                value={formData.projectManagerIds}
-                                onChange={handleMultiSelectChange}
-                            >
-                                {projectManagers.map(user => (
-                                    <option key={user.id} value={user.id}>{user.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="leadSupervisorIds" className="block text-sm font-medium text-gray-700 mb-1">Giám sát trưởng (chọn nhiều)</label>
-                            <select
-                                id="leadSupervisorIds"
-                                name="leadSupervisorIds"
-                                multiple
-                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-secondary focus:border-secondary h-32 bg-white text-gray-900"
-                                value={formData.leadSupervisorIds}
-                                onChange={handleMultiSelectChange}
-                            >
-                                {leadSupervisors.map(user => (
-                                    <option key={user.id} value={user.id}>{user.name}</option>
-                                ))}
-                            </select>
-                        </div>
+                        <MultiSelectCheckbox
+                            label="Cán bộ Quản lý (chọn nhiều)"
+                            name="projectManagerIds"
+                            options={projectManagerOptions}
+                            selectedValues={formData.projectManagerIds}
+                            onChange={(selected) => handleMultiSelectCheckboxChange('projectManagerIds', selected)}
+                        />
+                        <MultiSelectCheckbox
+                            label="Giám sát trưởng (chọn nhiều)"
+                            name="leadSupervisorIds"
+                            options={leadSupervisorOptions}
+                            selectedValues={formData.leadSupervisorIds}
+                            onChange={(selected) => handleMultiSelectCheckboxChange('leadSupervisorIds', selected)}
+                        />
                     </div>
                 </fieldset>
-
+                
                 <fieldset className="p-4 border rounded-md">
-                    <legend className="px-2 font-semibold text-gray-700">Thông tin Phê duyệt</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+                    <legend className="px-2 font-semibold text-gray-700">Các Mốc Thời gian Phê duyệt & Thi công</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8 mt-4">
                         <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
-                            <h4 className="font-medium text-gray-800">Kế hoạch vốn</h4>
-                            <Input label="Số Quyết định" name="capitalPlanApproval.decisionNumber" value={formData.capitalPlanApproval.decisionNumber} onChange={handleChange} />
-                            <Input label="Ngày" name="capitalPlanApproval.date" value={toYMD(formData.capitalPlanApproval.date)} onChange={handleChange} type="date"/>
+                            <h4 className="font-medium text-gray-800">1. Giao danh mục</h4>
+                            <Input label="Số QĐ giao" name="capitalPlanApproval.decisionNumber" value={formData.capitalPlanApproval.decisionNumber} onChange={handleChange} />
+                            <Input label="Ngày giao DM" name="capitalPlanApproval.date" value={toYMD(formData.capitalPlanApproval.date)} onChange={handleChange} type="date" />
                         </div>
-                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
-                            <h4 className="font-medium text-gray-800">Phương án kỹ thuật</h4>
-                            <Input label="Số Quyết định" name="technicalPlanApproval.decisionNumber" value={formData.technicalPlanApproval.decisionNumber} onChange={handleChange} />
-                            <Input label="Ngày" name="technicalPlanApproval.date" value={toYMD(formData.technicalPlanApproval.date)} onChange={handleChange} type="date"/>
-                        </div>
-                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
-                            <h4 className="font-medium text-gray-800">Dự toán</h4>
-                            <Input label="Số Quyết định" name="budgetApproval.decisionNumber" value={formData.budgetApproval.decisionNumber} onChange={handleChange} />
-                            <Input label="Ngày" name="budgetApproval.date" value={toYMD(formData.budgetApproval.date)} onChange={handleChange} type="date"/>
-                        </div>
-                    </div>
-                </fieldset>
 
-                 <fieldset className="p-4 border rounded-md">
-                    <legend className="px-2 font-semibold text-gray-700">Mốc thời gian</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                        <Input label="Ngày triển khai thi công" name="constructionStartDate" value={toYMD(formData.constructionStartDate)} onChange={handleChange} type="date" required />
-                        <Input label="Ngày nghiệm thu theo kế hoạch" name="plannedAcceptanceDate" value={toYMD(formData.plannedAcceptanceDate)} onChange={handleChange} type="date" required />
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">2. Đấu thầu: TV Thiết kế</h4>
+                            <Input label="Ngày P.hành HSMT" name="designBidding.itbIssuanceDate" value={toYMD(formData.designBidding.itbIssuanceDate)} onChange={handleChange} type="date" />
+                            <Input label="Ngày ký Hợp đồng" name="designBidding.contractSignDate" value={toYMD(formData.designBidding.contractSignDate)} onChange={handleChange} type="date" />
+                        </div>
+
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">3. Phê duyệt: P.án kỹ thuật</h4>
+                            <Input label="Ngày nộp" name="technicalPlanStage.submissionDate" value={toYMD(formData.technicalPlanStage.submissionDate)} onChange={handleChange} type="date" />
+                            <Input label="Ngày duyệt" name="technicalPlanStage.approvalDate" value={toYMD(formData.technicalPlanStage.approvalDate)} onChange={handleChange} type="date" />
+                        </div>
+                        
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">4. Phê duyệt: Dự toán</h4>
+                            <Input label="Ngày nộp" name="budgetStage.submissionDate" value={toYMD(formData.budgetStage.submissionDate)} onChange={handleChange} type="date" />
+                            <Input label="Ngày duyệt" name="budgetStage.approvalDate" value={toYMD(formData.budgetStage.approvalDate)} onChange={handleChange} type="date" />
+                        </div>
+                        
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">5. Đấu thầu: GS Thi công</h4>
+                            <Input label="Ngày P.hành HSMT" name="supervisionBidding.itbIssuanceDate" value={toYMD(formData.supervisionBidding.itbIssuanceDate)} onChange={handleChange} type="date" />
+                            <Input label="Ngày ký Hợp đồng" name="supervisionBidding.contractSignDate" value={toYMD(formData.supervisionBidding.contractSignDate)} onChange={handleChange} type="date" />
+                        </div>
+
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">6. Đấu thầu: TC Sửa chữa</h4>
+                            <Input label="Ngày P.hành HSMT" name="constructionBidding.itbIssuanceDate" value={toYMD(formData.constructionBidding.itbIssuanceDate)} onChange={handleChange} type="date" />
+                            <Input label="Ngày ký Hợp đồng" name="constructionBidding.contractSignDate" value={toYMD(formData.constructionBidding.contractSignDate)} onChange={handleChange} type="date" />
+                        </div>
+
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">7. Triển khai thi công</h4>
+                            <Input label="Ngày triển khai" name="constructionStartDate" value={toYMD(formData.constructionStartDate)} onChange={handleChange} type="date" required />
+                            <Input label="Ngày nghiệm thu KH" name="plannedAcceptanceDate" value={toYMD(formData.plannedAcceptanceDate)} onChange={handleChange} type="date" required />
+                        </div>
+
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                            <h4 className="font-medium text-gray-800">8. Quyết toán</h4>
+                            <Input label="Ngày nộp" name="finalSettlementStage.submissionDate" value={toYMD(formData.finalSettlementStage.submissionDate)} onChange={handleChange} type="date" />
+                            <Input label="Ngày duyệt" name="finalSettlementStage.approvalDate" value={toYMD(formData.finalSettlementStage.approvalDate)} onChange={handleChange} type="date" />
+                        </div>
                     </div>
                 </fieldset>
 
                  <fieldset className="p-4 border rounded-md">
                     <legend className="px-2 font-semibold text-gray-700">Thông tin các Đơn vị & Cán bộ</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                         <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
+                        <div className="space-y-3 p-4 bg-gray-50 rounded-md border md:col-span-1">
                             <h4 className="font-medium text-gray-800">Cán bộ Quản lý Dự án</h4>
-                            <Input label="Tên phòng" name="projectManagementUnit.departmentName" value={formData.projectManagementUnit.departmentName} onChange={handleChange} />
-                            <Input label="Tên Cán bộ" name="projectManagementUnit.personnelName" value={formData.projectManagementUnit.personnelName} onChange={handleChange} />
-                            <Input label="SĐT" name="projectManagementUnit.phone" value={formData.projectManagementUnit.phone} onChange={handleChange} />
+                            {(formData.projectManagementUnits || []).map((contact, index) => (
+                                <div key={index} className="space-y-3 p-3 border rounded-md relative bg-white shadow-sm">
+                                    { (formData.projectManagementUnits?.length || 0) > 1 && (
+                                        <button type="button" onClick={() => handleRemovePmContact(index)} className="absolute top-2 right-2 text-error hover:text-red-700 p-1 rounded-full bg-red-50 hover:bg-red-100" aria-label="Xóa cán bộ">
+                                            <XIcon className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                    <Input label={`Tên phòng ${ (formData.projectManagementUnits?.length || 0) > 1 ? `#${index + 1}` : ''}`} name={`projectManagementUnits.${index}.departmentName`} value={contact.departmentName} onChange={handleChange} />
+                                    <Input label={`Tên Cán bộ ${ (formData.projectManagementUnits?.length || 0) > 1 ? `#${index + 1}` : ''}`} name={`projectManagementUnits.${index}.personnelName`} value={contact.personnelName} onChange={handleChange} />
+                                    <Input label={`SĐT ${ (formData.projectManagementUnits?.length || 0) > 1 ? `#${index + 1}` : ''}`} name={`projectManagementUnits.${index}.phone`} value={contact.phone} onChange={handleChange} />
+                                </div>
+                            ))}
+                            <button type="button" onClick={handleAddPmContact} className="text-sm text-secondary font-semibold hover:underline mt-2">
+                                + Thêm cán bộ QLDA
+                            </button>
                         </div>
                         <div className="space-y-3 p-4 bg-gray-50 rounded-md border">
                             <h4 className="font-medium text-gray-800">Giám sát A của đơn vị QLVH</h4>

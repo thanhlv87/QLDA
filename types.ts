@@ -42,6 +42,16 @@ export interface ProjectReview {
   reviewedAt: string; // ISO 8601 timestamp
 }
 
+export interface ApprovalStage {
+  submissionDate: string; // Ngày nộp
+  approvalDate: string;   // Ngày duyệt
+}
+
+export interface BiddingPackage {
+  itbIssuanceDate: string;  // Ngày phát hành HSMT
+  contractSignDate: string; // Ngày ký hợp đồng
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -55,11 +65,20 @@ export interface Project {
   designUnit: ContactUnit;
   constructionUnit: ContactUnit;
   supervisionUnit: ContactUnit;
-  projectManagementUnit: ProjectManagementContact;
+  projectManagementUnits?: ProjectManagementContact[];
   supervisorA: SupervisorAContact;
   reviews?: Record<string, ProjectReview>; // Map of reportId to review data
   scheduleSheetUrl?: string; // URL for embedding Google Sheet schedule
   scheduleSheetEditUrl?: string; // URL for editing the Google Sheet
+
+  // NEW DETAILED DATE FIELDS - All optional for backward compatibility
+  portfolioAssignmentDate?: string;     // Giao danh mục
+  technicalPlanStage?: ApprovalStage;   // Phê duyệt Phương án kỹ thuật
+  budgetStage?: ApprovalStage;          // Phê duyệt Dự toán
+  designBidding?: BiddingPackage;       // Gói thầu: Tư vấn thiết kế
+  supervisionBidding?: BiddingPackage;  // Gói thầu: Giám sát thi công
+  constructionBidding?: BiddingPackage; // Gói thầu: Thi công sửa chữa
+  finalSettlementStage?: ApprovalStage; // Phê duyệt Quyết toán
 }
 
 export interface DailyReport {

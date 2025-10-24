@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Role } from '../types';
+import { User, Role } from '../types.ts';
 
 interface EditUserFormProps {
   user: User;

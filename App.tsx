@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser, signInWithPopup } from 'firebase/auth';
 import {
   collection,
@@ -18,22 +18,27 @@ import {
   setDoc,
   orderBy,
 } from 'firebase/firestore';
-import { auth, db, googleProvider } from './services/firebase';
-import type { User, Project, DailyReport, ProjectReview, Role } from './types';
-import { permissions } from './services/permissions';
+import { auth, db, googleProvider } from './services/firebase.ts';
+import type { User, Project, DailyReport, ProjectReview, Role } from './types.ts';
+import { permissions } from './services/permissions.ts';
 
 // Components
-import Login from './components/Login';
-import Header from './components/Header';
-import ProjectCard from './components/ProjectCard';
-import ProjectDetails from './components/ProjectDetails';
-import AddProjectForm from './components/AddProjectForm';
-import UserManagement from './components/UserManagement';
-import ConfirmationModal from './components/ConfirmationModal';
-import Toast from './components/Toast';
-import ProjectCardSkeleton from './components/ProjectCardSkeleton';
-import Footer from './components/Footer';
-import ApproveUserModal from './components/ApproveUserModal';
+import Login from './components/Login.tsx';
+import Header from './components/Header.tsx';
+import ProjectCard from './components/ProjectCard.tsx';
+import ConfirmationModal from './components/ConfirmationModal.tsx';
+import Toast from './components/Toast.tsx';
+import ProjectCardSkeleton from './components/ProjectCardSkeleton.tsx';
+import Footer from './components/Footer.tsx';
+import ApproveUserModal from './components/ApproveUserModal.tsx';
+import LoadingSpinner from './components/LoadingSpinner.tsx';
+import { ChevronDownIcon, ChevronUpIcon } from './components/Icons.tsx';
+
+// Lazy load components for code splitting
+const ProjectDetails = lazy(() => import('./components/ProjectDetails.tsx'));
+const AddProjectForm = lazy(() => import('./components/AddProjectForm.tsx'));
+const UserManagement = lazy(() => import('./components/UserManagement.tsx'));
+const OverallTimeline = lazy(() => import('./components/OverallTimeline.tsx'));
 
 
 type AppView = 'dashboard' | 'projectDetails' | 'addProject' | 'userManagement';
@@ -60,6 +65,8 @@ const App: React.FC = () => {
     const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
     const [userToApprove, setUserToApprove] = useState<User | null>(null);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [isTimelineVisible, setIsTimelineVisible] = useState(false);
+    const [selectedTimelineProjectIds, setSelectedTimelineProjectIds] = useState<string[]>([]);
     
     const addToast = (message: string, type: 'success' | 'error') => {
         const id = Date.now();
@@ -171,7 +178,10 @@ const App: React.FC = () => {
         if (permissions.canAddProject(currentUser)) { // Admins and Department Heads get all projects
             const projectsQuery = query(collection(db, 'projects'), orderBy('name'));
             const projectsUnsubscribe = onSnapshot(projectsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
-                setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
+                const fetchedProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+                setProjects(fetchedProjects);
+                // By default, select all projects for the timeline
+                setSelectedTimelineProjectIds(fetchedProjects.map(p => p.id));
                 setIsProjectsLoading(false);
             }, (error) => {
                 console.error("Error fetching projects:", error);
@@ -191,6 +201,8 @@ const App: React.FC = () => {
                 lsProjects.forEach(p => projectMap.set(p.id, p));
                 const sortedProjects = Array.from(projectMap.values()).sort((a, b) => a.name.localeCompare(b.name));
                 setProjects(sortedProjects);
+                // By default, select all fetched projects for the timeline
+                setSelectedTimelineProjectIds(sortedProjects.map(p => p.id));
                 setIsProjectsLoading(false);
             };
 
@@ -276,6 +288,10 @@ const App: React.FC = () => {
                 return new Date(yearB, monthB - 1, dayB).getTime() - new Date(yearA, monthA - 1, dayA).getTime();
             });
     }, [reports, selectedProject]);
+
+    const timelineProjects = useMemo(() => {
+        return projects.filter(p => selectedTimelineProjectIds.includes(p.id));
+    }, [projects, selectedTimelineProjectIds]);
 
     // Auth handlers
     const handleLogin = async (email: string, password: string) => {
@@ -467,6 +483,24 @@ const App: React.FC = () => {
         setView('dashboard');
     };
 
+    // Timeline filter handlers
+    const handleTimelineProjectToggle = (projectId: string) => {
+        setSelectedTimelineProjectIds(prev =>
+            prev.includes(projectId)
+                ? prev.filter(id => id !== projectId)
+                : [...prev, projectId]
+        );
+    };
+
+    const handleSelectAllProjectsForTimeline = () => {
+        setSelectedTimelineProjectIds(projects.map(p => p.id));
+    };
+
+    const handleDeselectAllProjectsForTimeline = () => {
+        setSelectedTimelineProjectIds([]);
+    };
+
+
     // Render logic
     if (isAuthLoading) {
         return (
@@ -555,6 +589,50 @@ const App: React.FC = () => {
                 const pendingUsers = users.filter(u => !u.role);
                 return (
                     <div className="animate-fade-in">
+                        {/* Collapsible Timeline Section - Only for Admins and Department Heads */}
+                        {permissions.canUseAiSummary(currentUser) && (
+                            <div className="mb-8 bg-base-100 rounded-lg shadow-md border border-gray-200">
+                                <button
+                                    onClick={() => setIsTimelineVisible(!isTimelineVisible)}
+                                    className="w-full flex justify-between items-center p-4 text-left font-bold text-lg text-primary hover:bg-neutral/50 rounded-lg"
+                                    aria-expanded={isTimelineVisible}
+                                >
+                                    <span>Dòng thời gian Tổng thể các Dự án</span>
+                                    {isTimelineVisible 
+                                        ? <ChevronUpIcon className="h-6 w-6 transition-transform" /> 
+                                        : <ChevronDownIcon className="h-6 w-6 transition-transform" />
+                                    }
+                                </button>
+                                {isTimelineVisible && (
+                                    <div className="border-t border-gray-200 p-4">
+                                        <div className="mb-4 bg-gray-50 p-3 rounded-md border">
+                                            <h4 className="font-semibold text-gray-700 mb-2">Chọn dự án để hiển thị:</h4>
+                                            <div className="flex gap-4 mb-3">
+                                                <button onClick={handleSelectAllProjectsForTimeline} className="text-sm text-secondary font-semibold hover:underline">Chọn tất cả</button>
+                                                <button onClick={handleDeselectAllProjectsForTimeline} className="text-sm text-secondary font-semibold hover:underline">Bỏ chọn tất cả</button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                                {projects.map(project => (
+                                                    <label key={project.id} className="flex items-center space-x-2 text-sm text-gray-800 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedTimelineProjectIds.includes(project.id)}
+                                                            onChange={() => handleTimelineProjectToggle(project.id)}
+                                                            className="h-4 w-4 rounded border-gray-300 text-secondary focus:ring-secondary shrink-0"
+                                                        />
+                                                        <span className="whitespace-nowrap" title={project.name}>{project.name}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <Suspense fallback={<div className="text-center p-8">Đang tải dòng thời gian...</div>}>
+                                            <OverallTimeline projects={timelineProjects} onSelectProject={handleSelectProject} />
+                                        </Suspense>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
                         {permissions.canManageUsers(currentUser) && pendingUsers.length > 0 && (
                             <div className="mb-8 p-4 sm:p-6 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg shadow-md animate-fade-in">
                                 <h3 className="text-lg sm:text-xl font-bold text-yellow-800 mb-4">Tài khoản chờ Phê duyệt ({pendingUsers.length})</h3>
@@ -621,7 +699,9 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-neutral flex flex-col">
             <Header user={currentUser} onLogout={handleLogout} />
             <main className="p-4 sm:p-6 lg:p-8 flex-grow">
-                {renderContent()}
+                <Suspense fallback={<LoadingSpinner />}>
+                    {renderContent()}
+                </Suspense>
             </main>
             <Footer />
             {projectToDelete && (

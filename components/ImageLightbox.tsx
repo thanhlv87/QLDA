@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from './Icons';
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from './Icons.tsx';
 
 interface ImageLightboxProps {
   images: string[];

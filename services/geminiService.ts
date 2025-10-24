@@ -1,10 +1,27 @@
 // FIX: Removed invalid frontmatter which was causing compilation errors.
 import { GoogleGenAI } from "@google/genai";
-import type { DailyReport, Project } from '../types';
+import type { DailyReport, Project } from '../types.ts';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize AI service safely.
+let ai: GoogleGenAI | null = null;
+try {
+  // Adheres to the guideline of using process.env.API_KEY,
+  // but won't crash the app if it's not available in the deployment environment.
+  ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+} catch (error) {
+  console.error(
+    "Gemini AI initialization failed. The API key might be missing or invalid.",
+    "This is expected in a static hosting environment like Firebase if the key isn't injected at build time.",
+    error
+  );
+}
+
 
 export const generateProjectSummary = async (project: Project, reports: DailyReport[]): Promise<string> => {
+  if (!ai) {
+    return "AI service is not available. Please ensure the API key is configured correctly in the deployment environment.";
+  }
+
   // FIX: Removed explicit API key check to comply with guidelines, which state to assume the key is always available via environment variables. The existing try-catch block will handle runtime API errors.
 
   const reportsText = reports

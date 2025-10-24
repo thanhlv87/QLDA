@@ -3,13 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://thanhlv87.github.io/QLDA-NPSC",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "firebase deploy --only hosting"
   },
   "dependencies": {
     "@google/genai": "^1.24.0",
@@ -21,7 +20,6 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.0",
-    "gh-pages": "^6.1.1",
     "typescript": "^5.0.2",
     "vite": "^5.0.0"
   }

@@ -1,7 +1,7 @@
 import React from 'react';
-import type { DailyReport, Project, ProjectReview, User } from '../types';
-import { permissions } from '../services/permissions';
-import { XIcon } from './Icons';
+import type { DailyReport, Project, ProjectReview, User } from '../types.ts';
+import { permissions } from '../services/permissions.ts';
+import { XIcon } from './Icons.tsx';
 
 interface ReportDetailsModalProps {
   report: DailyReport;

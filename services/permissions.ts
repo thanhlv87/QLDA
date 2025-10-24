@@ -1,4 +1,4 @@
-import type { User, Project } from '../types';
+import type { User, Project } from '../types.ts';
 
 // A central object to hold all permission-related logic.
 // This version uses robust, case-insensitive, trimmed string comparisons

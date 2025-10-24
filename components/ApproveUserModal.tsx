@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Role } from '../types';
+import { User, Role } from '../types.ts';
 
 interface ApproveUserModalProps {
   user: User;

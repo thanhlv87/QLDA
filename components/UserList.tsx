@@ -1,6 +1,6 @@
 import React from 'react';
-import type { User } from '../types';
-import { permissions } from '../services/permissions';
+import type { User } from '../types.ts';
+import { permissions } from '../services/permissions.ts';
 
 interface UserListProps {
     users: User[];

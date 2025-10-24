@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { DailyReport } from '../types';
-import { XIcon } from './Icons';
+import type { DailyReport } from '../types.ts';
+import { XIcon } from './Icons.tsx';
 
 interface EditReportFormProps {
   report: DailyReport;

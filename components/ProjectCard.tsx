@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import type { Project, User } from '../types';
-import { permissions } from '../services/permissions';
-import { CalendarIcon, TrashIcon } from './Icons';
+import type { Project, User } from '../types.ts';
+import { permissions } from '../services/permissions.ts';
+import { CalendarIcon, TrashIcon } from './Icons.tsx';
 
 interface ProjectCardProps {
   project: Project;

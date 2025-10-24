@@ -1,18 +1,20 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import type { Project, DailyReport, User, ProjectReview } from '../types';
-import { Role } from '../types';
-import { permissions } from '../services/permissions';
-import { generateProjectSummary } from '../services/geminiService';
-import AddReportForm from './AddReportForm';
-import EditReportForm from './EditReportForm';
-import EditProjectForm from './EditProjectForm';
-import ReportCard from './ReportCard';
-import ConfirmationModal from './ConfirmationModal';
-import ImageLightbox from './ImageLightbox'; // New component for image gallery
-import ReportCardSkeleton from './ReportCardSkeleton'; // New component for loading state
-import ReportDetailsModal from './ReportDetailsModal'; // New component for report details
+import type { Project, DailyReport, User, ProjectReview } from '../types.ts';
+import { Role } from '../types.ts';
+import { permissions } from '../services/permissions.ts';
+import { generateProjectSummary } from '../services/geminiService.ts';
+import AddReportForm from './AddReportForm.tsx';
+import EditReportForm from './EditReportForm.tsx';
+import EditProjectForm from './EditProjectForm.tsx';
+import ReportCard from './ReportCard.tsx';
+import ConfirmationModal from './ConfirmationModal.tsx';
+import ImageLightbox from './ImageLightbox.tsx'; // New component for image gallery
+import ReportCardSkeleton from './ReportCardSkeleton.tsx'; // New component for loading state
+import ReportDetailsModal from './ReportDetailsModal.tsx'; // New component for report details
 // FIX: Removed CheckCircleIcon and ClockIcon as they are not used and were causing import errors.
-import { ArrowLeftIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CompanyIcon, ExternalLinkIcon, PhoneIcon, UserCircleIcon, UserGroupIcon, XIcon } from './Icons';
+import { ArrowLeftIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CompanyIcon, ExternalLinkIcon, PhoneIcon, UserCircleIcon, UserGroupIcon, XIcon } from './Icons.tsx';
+import ApprovalTimeline from './ApprovalTimeline.tsx';
 
 
 // Modal for Project Manager to add a review
@@ -88,11 +90,12 @@ const DetailItem: React.FC<{ label: string; value?: string | React.ReactNode; ic
   </div>
 );
 
-const ApprovalCard: React.FC<{ title: string; approval: Project['capitalPlanApproval'] }> = ({ title, approval }) => (
-     <div className="space-y-2 p-4 bg-gray-50 rounded-md border">
-        <h5 className="font-semibold text-gray-800 text-base">{title}</h5>
-        <DetailItem label="Số Quyết định" value={approval.decisionNumber} />
-        <DetailItem label="Ngày" value={approval.date} />
+const DateSectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <div className="p-4 bg-gray-50 rounded-md border h-full">
+        <h5 className="font-semibold text-gray-800 mb-3 text-base">{title}</h5>
+        <div className="space-y-2">
+            {children}
+        </div>
     </div>
 );
 
@@ -376,10 +379,51 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             )}
             
             {activeTab === 'approvals' && canViewApprovals && (
-                <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200 animate-fade-in grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <ApprovalCard title="Kế hoạch vốn" approval={project.capitalPlanApproval} />
-                    <ApprovalCard title="Phương án kỹ thuật" approval={project.technicalPlanApproval} />
-                    <ApprovalCard title="Dự toán" approval={project.budgetApproval} />
+                <div className="animate-fade-in">
+                    <ApprovalTimeline project={project} />
+                    <div className="bg-base-100 rounded-lg shadow-md p-6 border border-gray-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            <DateSectionCard title="1. Giao danh mục">
+                                <DetailItem label="Số QĐ giao" value={project.capitalPlanApproval?.decisionNumber} />
+                                <DetailItem label="Ngày giao DM" value={project.capitalPlanApproval?.date} />
+                            </DateSectionCard>
+
+                            <DateSectionCard title="2. Đấu thầu: Tư vấn thiết kế">
+                            <DetailItem label="Ngày P.hành HSMT" value={project.designBidding?.itbIssuanceDate} />
+                            <DetailItem label="Ngày ký Hợp đồng" value={project.designBidding?.contractSignDate} />
+                            </DateSectionCard>
+
+                            <DateSectionCard title="3. Phê duyệt: Phương án kỹ thuật">
+                                <DetailItem label="Ngày nộp" value={project.technicalPlanStage?.submissionDate} />
+                                <DetailItem label="Ngày duyệt" value={project.technicalPlanStage?.approvalDate} />
+                            </DateSectionCard>
+
+                            <DateSectionCard title="4. Phê duyệt: Dự toán">
+                                <DetailItem label="Ngày nộp" value={project.budgetStage?.submissionDate} />
+                                <DetailItem label="Ngày duyệt" value={project.budgetStage?.approvalDate} />
+                            </DateSectionCard>
+
+                            <DateSectionCard title="5. Đấu thầu: Giám sát thi công">
+                                <DetailItem label="Ngày P.hành HSMT" value={project.supervisionBidding?.itbIssuanceDate} />
+                                <DetailItem label="Ngày ký Hợp đồng" value={project.supervisionBidding?.contractSignDate} />
+                            </DateSectionCard>
+
+                            <DateSectionCard title="6. Đấu thầu: Thi công sửa chữa">
+                                <DetailItem label="Ngày P.hành HSMT" value={project.constructionBidding?.itbIssuanceDate} />
+                                <DetailItem label="Ngày ký Hợp đồng" value={project.constructionBidding?.contractSignDate} />
+                            </DateSectionCard>
+                            
+                            <DateSectionCard title="7. Triển khai thi công">
+                                <DetailItem label="Ngày triển khai" value={project.constructionStartDate} />
+                                <DetailItem label="Ngày nghiệm thu KH" value={project.plannedAcceptanceDate} />
+                            </DateSectionCard>
+
+                            <DateSectionCard title="8. Quyết toán">
+                                <DetailItem label="Ngày nộp" value={project.finalSettlementStage?.submissionDate} />
+                                <DetailItem label="Ngày duyệt" value={project.finalSettlementStage?.approvalDate} />
+                            </DateSectionCard>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -421,12 +465,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                         </DetailSection>
                     )}
 
-                    <DetailSection title="Mốc thời gian">
-{/* FIX: Corrected a syntax error where a component tag was incomplete. */}
-                        <DetailItem label="Ngày triển khai thi công" value={project.constructionStartDate} icon={<CalendarIcon />} />
-                        <DetailItem label="Ngày nghiệm thu theo kế hoạch" value={project.plannedAcceptanceDate} icon={<CalendarIcon />} />
-                    </DetailSection>
-
                      <DetailSection title="Thông tin các Đơn vị & Cán bộ">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <ContactCard title="Đơn vị Thiết kế" details={[
@@ -444,11 +482,28 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                                 { label: "Giám sát trưởng", value: project.supervisionUnit?.personnelName, icon: <UserCircleIcon /> },
                                 { label: "SĐT", value: project.supervisionUnit?.phone, icon: <PhoneIcon /> },
                             ]} />
-                             <ContactCard title="Cán bộ QLDA" details={[
-                                { label: "Phòng", value: project.projectManagementUnit?.departmentName, icon: <CompanyIcon /> },
-                                { label: "Cán bộ", value: project.projectManagementUnit?.personnelName, icon: <UserCircleIcon /> },
-                                { label: "SĐT", value: project.projectManagementUnit?.phone, icon: <PhoneIcon /> },
-                            ]} />
+                            {project.projectManagementUnits && project.projectManagementUnits.length > 0 ? (
+                                project.projectManagementUnits.map((unit, index) => (
+                                    <ContactCard 
+                                        key={`pm-unit-${index}`} 
+                                        title={`Cán bộ QLDA ${project.projectManagementUnits.length > 1 ? `#${index + 1}` : ''}`} 
+                                        details={[
+                                            { label: "Phòng", value: unit.departmentName, icon: <CompanyIcon /> },
+                                            { label: "Cán bộ", value: unit.personnelName, icon: <UserCircleIcon /> },
+                                            { label: "SĐT", value: unit.phone, icon: <PhoneIcon /> },
+                                        ]} 
+                                    />
+                                ))
+                            ) : (
+                                <ContactCard 
+                                    title="Cán bộ QLDA" 
+                                    details={[
+                                        { label: "Phòng", value: undefined, icon: <CompanyIcon /> },
+                                        { label: "Cán bộ", value: undefined, icon: <UserCircleIcon /> },
+                                        { label: "SĐT", value: undefined, icon: <PhoneIcon /> },
+                                    ]} 
+                                />
+                            )}
                              <ContactCard title="Giám sát A (QLVH)" details={[
                                 { label: "XNDV", value: project.supervisorA?.enterpriseName, icon: <CompanyIcon /> },
                                 { label: "Cán bộ", value: project.supervisorA?.personnelName, icon: <UserCircleIcon /> },

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { User } from '../types';
-import { MenuIcon, XIcon } from './Icons';
+import type { User } from '../types.ts';
+import { MenuIcon, XIcon } from './Icons.tsx';
 
 interface HeaderProps {
     user: User | null;

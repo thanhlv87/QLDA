@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DailyReport, ProjectReview } from '../types';
+import type { DailyReport, ProjectReview } from '../types.ts';
 
 interface ReportCardProps {
   report: DailyReport;

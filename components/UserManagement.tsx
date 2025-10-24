@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import type { User } from '../types';
-import UserList from './UserList';
-import EditUserForm from './EditUserForm';
-import ConfirmationModal from './ConfirmationModal';
-import { ArrowLeftIcon } from './Icons';
+import type { User } from '../types.ts';
+import UserList from './UserList.tsx';
+import EditUserForm from './EditUserForm.tsx';
+import ConfirmationModal from './ConfirmationModal.tsx';
+import { ArrowLeftIcon } from './Icons.tsx';
 
 interface UserManagementProps {
     users: User[];
